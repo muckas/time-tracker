@@ -11,7 +11,7 @@ from telegram.ext import CommandHandler, MessageHandler, Filters
 import db
 import traceback
 
-VERSION = '0.0.1'
+VERSION = '0.1.0'
 NAME = 'Time Tracker'
 
 # Logger setup
@@ -64,22 +64,25 @@ except Exception:
 
 help_text = '''I am sorry, but there's nothing I can help you with...'''
 
-def add_user_to_db(user_id, update):
+def add_user_to_db(update):
+  user_id = str(update.message.chat['id'])
   log.info(f'Adding new user {user_id} to database')
   users = db.read('users')
   tg_username = str(update.message.chat['username'])
   users.update({user_id:{'username':tg_username, 'tasks':{}}})
   db.write('users', users)
-  log.info(f'Added {tg_username} to database')
+  log.info(f'Added @{tg_username} to database')
 
 def start_command(update, context):
   user_id = str(update.message.chat['id'])
+  if validated(update):
+    update.message.reply_text(help_text)
+
+def validated(update, notify=False):
+  user_id = str(update.message.chat['id'])
   users = db.read('users')
   if user_id not in users:
-    add_user_to_db(user_id)
-  help_command(update, context)
-
-def whitelisted(user_id, notify=False):
+    add_user_to_db(update)
   whitelist = db.read('whitelist')
   if db.read('params')['use_whitelist']:
     if user_id in whitelist:
@@ -94,11 +97,13 @@ def whitelisted(user_id, notify=False):
     return True
 
 def help_command(update, context):
-  if whitelisted(update.message.chat['id'], True):
+  user_id = str(update.message.chat['id'])
+  if validated(update):
     update.message.reply_text(help_text)
 
 def handle_message(update, context):
-  if whitelisted(update.message.chat['id'], True):
+  user_id = str(update.message.chat['id'])
+  if validated(update):
     update.message.reply_text(update.message.text)
 
 def mainloop():
@@ -110,8 +115,7 @@ def mainloop():
     admin_id = db.read('params')['admin']
     if admin_id:
       error_msg = '{NAME} stopped with an exception'
-      tg.send_message(chat_id=admin_id, text = error_msg)
-      tg.send_message(chat_id=admin_id, text = traceback.format_exc())
+      tg.send_message(chat_id=admin_id, text = error_msg, disable_notification=True)
     return 0
 
 if __name__ == '__main__':
@@ -128,7 +132,7 @@ if __name__ == '__main__':
           msg += f'\n  {user}'
       else:
         msg += f'Whitelist disabled'
-      tg.send_message(chat_id=admin_id, text = msg)
+      tg.send_message(chat_id=admin_id, text = msg, disable_notification=True)
     updater = telegram.ext.Updater(tg_token)
     dispatcher = updater.dispatcher
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
