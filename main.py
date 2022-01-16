@@ -79,7 +79,7 @@ def start_command(update, context):
     update.message.reply_text(help_text)
 
 def validated(update, notify=False):
-  user_id = str(update.message.chat['id'])
+  user_id = update.message.chat['id']
   users = db.read('users')
   if user_id not in users:
     add_user_to_db(update)
@@ -91,14 +91,14 @@ def validated(update, notify=False):
     else:
       log.debug(f'User {user_id} not whitelisted')
       if notify:
-        tg.send_message(chat_id = user_id, text = f"I don't know you\nYour id is {user_id}")
+        tg.send_message(chat_id = user_id, text = f"Your id is {user_id}")
       return False
   else:
     return True
 
 def help_command(update, context):
   user_id = str(update.message.chat['id'])
-  if validated(update):
+  if validated(update, notify=True):
     update.message.reply_text(help_text)
 
 def handle_message(update, context):
