@@ -58,25 +58,29 @@ def handle_message(update, context):
   if validated(update):
     send_message(user_id, update.message.text)
 
-def start_command(update, context):
+def command_start(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
     send_message(user_id, help_text)
 
-def help_command(update, context):
+def command_help(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update, notify=True):
     send_message(user_id, help_text)
+
+def error_handler(update, context):
+  log.warning(msg="Exception while handling an update:", exc_info=context.error)
 
 def start(tg_token):
   log.info('Starting telegram bot...')
   updater = telegram.ext.Updater(tg_token)
   dispatcher = updater.dispatcher
   dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-  dispatcher.add_handler(CommandHandler('help', help_command))
-  dispatcher.add_handler(CommandHandler('start', start_command))
+  dispatcher.add_handler(CommandHandler('start', command_start))
+  dispatcher.add_handler(CommandHandler('help', command_help))
+  dispatcher.add_error_handler(error_handler)
   updater.start_polling()
   log.info('Telegram bot started')
   return updater
