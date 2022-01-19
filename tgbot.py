@@ -5,6 +5,7 @@ from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import telegram.ext
 from telegram.ext import CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 import db
+import logic
 
 log = logging.getLogger('main')
 
@@ -12,17 +13,23 @@ tg = None
 
 help_text = '''I am sorry, but there's nothing I can help you with...'''
 
-def send_message(user_id, text, silent=False, reply_markup=None):
+def send_message(user_id, text, silent=True, keyboard=None):
   users = db.read('users')
   username = users[user_id]['username']
+  if keyboard == None:
+    reply_markup = None
+  else:
+    if keyboard == []:
+      reply_markup = ReplyKeyboardRemove()
+    else:
+      reply_markup = ReplyKeyboardMarkup(keyboard)
   tg.send_message(chat_id=user_id, text=text, disable_notification=silent, reply_markup=reply_markup)
   log.info(f'Message to @{username}({user_id}):{text}')
 
 def log_message(update):
   user_id = str(update.message.chat['id'])
+  username = str(update.message.chat['username'])
   text = update.message.text
-  users = db.read('users')
-  username = users[user_id]['username']
   log.info(f'Message from @{username}({user_id}):{text}')
 
 def add_user_to_db(update):
@@ -30,7 +37,11 @@ def add_user_to_db(update):
   log.info(f'Adding new user {user_id} to database')
   users = db.read('users')
   tg_username = str(update.message.chat['username'])
-  users.update({user_id:{'username':tg_username, 'tasks':{}}})
+  users.update({user_id:{'username':tg_username,
+                        'state':'main_menu',
+                        'active_task':None,
+                        'tasks':[]
+                        }})
   db.write('users', users)
   log.info(f'Added @{tg_username} to database')
 
@@ -57,32 +68,25 @@ def message_handler(update, context):
   user_id = str(update.message.chat['id'])
   if validated(update):
     text = update.message.text
-    if text == 'Remove Keyboard':
-      send_message(user_id, 'Keyboard Removed', reply_markup=ReplyKeyboardRemove())
+    logic.menu_handler(user_id, text)
 
 def command_start(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
-    send_message(user_id, help_text)
+    logic.enable_menu(user_id)
 
 def command_help(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update, notify=True):
-    send_message(user_id, help_text)
+    send_message(user_id, help_text, silent=True)
 
 def command_menu(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
-    keyboard = [
-        ['Start task'],
-        ['Edit tasks'],
-        ['Remove Keyboard']
-        ]
-    reply_markup = ReplyKeyboardMarkup(keyboard)
-    send_message(user_id, 'Main menu', reply_markup=reply_markup)
+    logic.enable_menu(user_id)
 
 def error_handler(update, context):
   log.warning(msg="Exception while handling an update:", exc_info=context.error)
