@@ -1,9 +1,9 @@
 import os
 import logging
 import telegram
-from telegram import InputMediaPhoto
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import telegram.ext
-from telegram.ext import CommandHandler, MessageHandler, Filters
+from telegram.ext import CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 import db
 
 log = logging.getLogger('main')
@@ -12,10 +12,10 @@ tg = None
 
 help_text = '''I am sorry, but there's nothing I can help you with...'''
 
-def send_message(user_id, text, silent=False):
+def send_message(user_id, text, silent=False, reply_markup=None):
   users = db.read('users')
   username = users[user_id]['username']
-  tg.send_message(chat_id=user_id, text=text, disable_notification=silent)
+  tg.send_message(chat_id=user_id, text=text, disable_notification=silent, reply_markup=reply_markup)
   log.info(f'Message to @{username}({user_id}):{text}')
 
 def log_message(update):
@@ -52,11 +52,13 @@ def validated(update, notify=False):
   else:
     return True
 
-def handle_message(update, context):
+def message_handler(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
-    send_message(user_id, update.message.text)
+    text = update.message.text
+    if text == 'Remove Keyboard':
+      send_message(user_id, 'Keyboard Removed', reply_markup=ReplyKeyboardRemove())
 
 def command_start(update, context):
   log_message(update)
@@ -70,6 +72,18 @@ def command_help(update, context):
   if validated(update, notify=True):
     send_message(user_id, help_text)
 
+def command_menu(update, context):
+  log_message(update)
+  user_id = str(update.message.chat['id'])
+  if validated(update):
+    keyboard = [
+        ['Start task'],
+        ['Edit tasks'],
+        ['Remove Keyboard']
+        ]
+    reply_markup = ReplyKeyboardMarkup(keyboard)
+    send_message(user_id, 'Main menu', reply_markup=reply_markup)
+
 def error_handler(update, context):
   log.warning(msg="Exception while handling an update:", exc_info=context.error)
 
@@ -77,9 +91,10 @@ def start(tg_token):
   log.info('Starting telegram bot...')
   updater = telegram.ext.Updater(tg_token)
   dispatcher = updater.dispatcher
-  dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+  dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, message_handler))
   dispatcher.add_handler(CommandHandler('start', command_start))
   dispatcher.add_handler(CommandHandler('help', command_help))
+  dispatcher.add_handler(CommandHandler('menu', command_menu))
   dispatcher.add_error_handler(error_handler)
   updater.start_polling()
   log.info('Telegram bot started')
