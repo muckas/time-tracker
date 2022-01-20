@@ -6,6 +6,7 @@ import telegram.ext
 from telegram.ext import CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 import db
 import logic
+import constants
 
 log = logging.getLogger('main')
 
@@ -37,11 +38,7 @@ def add_user_to_db(update):
   log.info(f'Adding new user {user_id} to database')
   users = db.read('users')
   tg_username = str(update.message.chat['username'])
-  users.update({user_id:{'username':tg_username,
-                        'state':'main_menu',
-                        'active_task':None,
-                        'tasks':[]
-                        }})
+  users.update({user_id:constants.get_default_user(tg_username)})
   db.write('users', users)
   log.info(f'Added @{tg_username} to database')
 
@@ -99,6 +96,7 @@ def start(tg_token):
   dispatcher.add_handler(CommandHandler('start', command_start))
   dispatcher.add_handler(CommandHandler('help', command_help))
   dispatcher.add_handler(CommandHandler('menu', command_menu))
+  dispatcher.add_handler(CommandHandler('cancel', command_menu))
   dispatcher.add_error_handler(error_handler)
   updater.start_polling()
   log.info('Telegram bot started')
