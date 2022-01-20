@@ -1,5 +1,6 @@
 import os
 import logging
+from contextlib import suppress
 import telegram
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import telegram.ext
@@ -40,6 +41,10 @@ def add_user_to_db(update):
   tg_username = str(update.message.chat['username'])
   users.update({user_id:constants.get_default_user(tg_username)})
   db.write('users', users)
+  with suppress(FileExistsError):
+    path = os.path.join('db', 'data', user_id)
+    os.makedirs(path)
+    log.info(f'Created {path} folder')
   log.info(f'Added @{tg_username} to database')
 
 def validated(update, notify=False):

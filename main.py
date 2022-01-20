@@ -12,7 +12,7 @@ import db
 import traceback
 import tgbot
 
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 NAME = 'Time Tracker'
 
 # Logger setup
@@ -73,6 +73,10 @@ if __name__ == '__main__':
     db.init('users')
     params = db.init('params')
     whitelist = db.init('whitelist')
+    with suppress(FileExistsError):
+      path = os.path.join('db', 'data')
+      os.makedirs(path)
+      log.info(f'Created {path} folder')
     admin_id = params['admin']
     if admin_id:
       msg = f'{NAME} v{VERSION}\n'
