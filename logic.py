@@ -17,6 +17,7 @@ def get_main_menu(user_id):
   keyboard = [
       [start_task_button],
       [constants.get_name('add_task'), constants.get_name('remove_task')],
+      [constants.get_name('task_stats')],
       # [constants.get_name('disable_menu')]
       ]
   return keyboard
@@ -52,6 +53,17 @@ def stop_task(user_id, task_name):
   users[user_id]['tasks'][task_name]['time_total'] += task_duration_sec
   db.write('users',users)
   return task_duration
+
+def get_task_stats(user_id):
+  users = db.read('users')
+  tasks = get_enabled_tasks(user_id)
+  report = 'Total task statistics\n--------------------'
+  for task in tasks:
+    task_info = users[user_id]['tasks'][task]
+    time_total = datetime.timedelta(seconds=task_info['time_total'])
+    time_total_hours = task_info['time_total'] / 60 / 60
+    report += f'\n{task}: {time_total} ~ {time_total_hours:.1f} hours'
+  return report
 
 def menu_handler(user_id, text):
   users = db.read('users')
@@ -103,6 +115,9 @@ def menu_handler(user_id, text):
         else:
           tgbot.send_message(user_id, f'Task "{task_name}" is not active', keyboard=get_main_menu(user_id))
 
+    if button_name == constants.get_name('task_stats'):
+      tgbot.send_message(user_id, get_task_stats(user_id), keyboard=get_main_menu(user_id))
+
   # STATE - start_task
   elif state == 'start_task':
     task_name = text
@@ -124,6 +139,7 @@ def menu_handler(user_id, text):
         users[user_id]['tasks'][task_name]['enabled'] = True
         db.write('users',users)
         tgbot.send_message(user_id, f'Added task "{task_name}" again', keyboard=get_main_menu(user_id))
+        change_state(user_id, 'main_menu')
     else: # adding task to db
       users[user_id]['tasks'].update(
           {task_name:{

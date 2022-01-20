@@ -12,6 +12,7 @@ def get_name(name):
     'start_task':'Start task',
     'add_task':'Add task',
     'remove_task':'Remove task',
-    'stop':'Stop '
+    'stop':'Stop ',
+    'task_stats':'Show task stats',
     }
   return names[name]
