@@ -118,7 +118,12 @@ def menu_handler(user_id, text):
   elif state == 'add_task':
     task_name = text
     if task_name in users[user_id]['tasks'].keys():
-      tgbot.send_message(user_id, f'Task "{task_name}" already exists\nChoose another name\n/cancel')
+      if users[user_id]['tasks'][task_name]['enabled']:
+        tgbot.send_message(user_id, f'Task "{task_name}" already exists\nChoose another name\n/cancel')
+      else:
+        users[user_id]['tasks'][task_name]['enabled'] = True
+        db.write('users',users)
+        tgbot.send_message(user_id, f'Added task "{task_name}" again', keyboard=get_main_menu(user_id))
     else: # adding task to db
       users[user_id]['tasks'].update(
           {task_name:{
@@ -136,7 +141,7 @@ def menu_handler(user_id, text):
     if users[user_id]['active_task'] == task_name:
       users[user_id]['active_task'] = None
     if task_name in users[user_id]['tasks'].keys():
-      users[user_id]['tasks'].pop(task_name)
+      users[user_id]['tasks'][task_name]['enabled'] = False
       db.write('users',users)
       tgbot.send_message(user_id, f'Removed task "{task_name}"', keyboard=get_main_menu(user_id))
     else:
