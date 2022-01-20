@@ -4,7 +4,6 @@ def get_default_user(tg_username):
       'state':'main_menu',
       'active_task':{},
       'tasks':{},
-      'task_summary':{}
       }
 
 def get_name(name):
