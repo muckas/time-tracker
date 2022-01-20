@@ -20,6 +20,8 @@ def get_main_menu(user_id):
       [constants.get_name('task_stats')],
       # [constants.get_name('disable_menu')]
       ]
+  if users[user_id]['timezone'] == None:
+    keyboard[0] = [constants.get_name('set_timezone')]
   return keyboard
 
 def enable_menu(user_id):
@@ -32,7 +34,9 @@ def disable_menu(user_id):
 def change_state(user_id, new_state):
   users = db.read('users')
   users[user_id]['state'] = new_state
+  username = users[user_id]['username']
   db.write('users', users)
+  log.debug(f'New state "{new_state}" for user @{username}({user_id})')
 
 def get_enabled_tasks(user_id):
   users = db.read('users')
@@ -69,57 +73,8 @@ def menu_handler(user_id, text):
   users = db.read('users')
   state = users[user_id]['state']
 
-  # STATE - main_menu
-  if state == 'main_menu':
-    button_name = text
-
-    if button_name == constants.get_name('disable_menu'):
-      disable_menu(user_id)
-
-    elif button_name == constants.get_name('start_task'):
-      tasks = get_enabled_tasks(user_id)
-      if tasks:
-        keyboard = []
-        for task in tasks:
-          keyboard.append([task])
-        tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
-        change_state(user_id, 'start_task')
-      else:
-        tgbot.send_message(user_id, "You don't have any tasks")
-
-    elif button_name == constants.get_name('add_task'):
-      tgbot.send_message(user_id, 'Name a task\n/cancel', keyboard = [])
-      change_state(user_id, 'add_task')
-
-    elif button_name == constants.get_name('remove_task'):
-      tasks = get_enabled_tasks(user_id)
-      if tasks:
-        keyboard = []
-        for task in tasks:
-          keyboard.append([task])
-        tgbot.send_message(user_id, 'Choose a task to remove\n/cancel', keyboard=keyboard)
-        change_state(user_id, 'remove_task')
-      else:
-        tgbot.send_message(user_id, "You don't have any tasks")
-
-    else: # Checking for "Stop {task}"
-      stop_string = constants.get_name('stop')
-      stop_string_len = len(stop_string)
-      # removing active task
-      if button_name[:stop_string_len] == stop_string:
-        task_name = button_name[stop_string_len:]
-        if users[user_id]['active_task']:
-          if users[user_id]['active_task']['name'] == task_name:
-            task_duration = stop_task(user_id, task_name)
-            tgbot.send_message(user_id, f'Stopped {task_name}\nTime taken: {task_duration}', keyboard=get_main_menu(user_id))
-        else:
-          tgbot.send_message(user_id, f'Task "{task_name}" is not active', keyboard=get_main_menu(user_id))
-
-    if button_name == constants.get_name('task_stats'):
-      tgbot.send_message(user_id, get_task_stats(user_id), keyboard=get_main_menu(user_id))
-
   # STATE - start_task
-  elif state == 'start_task':
+  if state == 'start_task':
     task_name = text
     users[user_id]['active_task'] = {
         'name': task_name,
@@ -163,3 +118,74 @@ def menu_handler(user_id, text):
     else:
       tgbot.send_message(user_id, f'Task "{task_name}" doesn\'t exist\n/cancel', keyboard=get_main_menu(user_id))
     change_state(user_id, 'main_menu')
+
+  # STATE - set_timezone
+  elif state == 'set_timezone':
+    try:
+      hour_offset = int(text)
+      if hour_offset in range(-12, 15):
+        users[user_id]['timezone'] = hour_offset
+        db.write('users', users)
+        if hour_offset >= 0:
+          tz = f'UTC+{hour_offset}'
+        else:
+          tz = f'UTC{hour_offset}'
+        tgbot.send_message(user_id, f'Timezone set to {tz}', keyboard=get_main_menu(user_id))
+        change_state(user_id, 'main_menu')
+      else:
+        tgbot.send_message(user_id, 'Invalid UTC offset\nValid range (-12...+14)\n/cancel', keyboard=[])
+    except ValueError:
+      tgbot.send_message(user_id, 'UTC offset must be an integer\nValid range (-12...+14)\n/cancel', keyboard=[])
+
+  # STATE - main_menu
+  elif state == 'main_menu':
+    button_name = text
+
+    if button_name == constants.get_name('disable_menu'):
+      disable_menu(user_id)
+
+    elif button_name == constants.get_name('set_timezone'):
+      tgbot.send_message(user_id, 'Send hour offset for UTC\nValid range (-12...+14)\n/cancel', keyboard=[])
+      change_state(user_id, 'set_timezone')
+
+    elif button_name == constants.get_name('start_task'):
+      tasks = get_enabled_tasks(user_id)
+      if tasks:
+        keyboard = []
+        for task in tasks:
+          keyboard.append([task])
+        tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
+        change_state(user_id, 'start_task')
+      else:
+        tgbot.send_message(user_id, "You don't have any tasks")
+
+    elif button_name == constants.get_name('add_task'):
+      tgbot.send_message(user_id, 'Name a task\n/cancel', keyboard = [])
+      change_state(user_id, 'add_task')
+
+    elif button_name == constants.get_name('remove_task'):
+      tasks = get_enabled_tasks(user_id)
+      if tasks:
+        keyboard = []
+        for task in tasks:
+          keyboard.append([task])
+        tgbot.send_message(user_id, 'Choose a task to remove\n/cancel', keyboard=keyboard)
+        change_state(user_id, 'remove_task')
+      else:
+        tgbot.send_message(user_id, "You don't have any tasks")
+
+    else: # Checking for "Stop {task}"
+      stop_string = constants.get_name('stop')
+      stop_string_len = len(stop_string)
+      # removing active task
+      if button_name[:stop_string_len] == stop_string:
+        task_name = button_name[stop_string_len:]
+        if users[user_id]['active_task']:
+          if users[user_id]['active_task']['name'] == task_name:
+            task_duration = stop_task(user_id, task_name)
+            tgbot.send_message(user_id, f'Stopped {task_name}\nTime taken: {task_duration}', keyboard=get_main_menu(user_id))
+        else:
+          tgbot.send_message(user_id, f'Task "{task_name}" is not active', keyboard=get_main_menu(user_id))
+
+    if button_name == constants.get_name('task_stats'):
+      tgbot.send_message(user_id, get_task_stats(user_id), keyboard=get_main_menu(user_id))
