@@ -1,6 +1,7 @@
 /logs
 /venv
 /backup
+/db/data
 users.json
 params.json
 whitelist.json
