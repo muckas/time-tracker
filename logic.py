@@ -69,17 +69,14 @@ def write_task_to_diary(users, user_id, task_name, start_time, end_time):
   tz_end_time = timezoned(users, user_id, end_time)
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)
   end_date = datetime.datetime.utcfromtimestamp(tz_end_time)
-  print(start_date.timestamp())
-  print(start_date.replace(hour=0, minute=0, second=0).timestamp())
-  one_day = datetime.timedelta(days=1)
+  one_second = datetime.timedelta(seconds=1)
   while True:
     if start_date.date() == end_date.date():
       update_diary_day(users, user_id, task_name, start_date.timestamp(), end_date.timestamp(), timezone)
       break
-    temp_end_date = start_date + one_day
-    temp_end_date = temp_end_date.replace(hour=0, minute=0, second=0)
+    temp_end_date = start_date.replace(hour=23, minute=59, second=59)
     update_diary_day(users, user_id, task_name, start_date.timestamp(), temp_end_date.timestamp(), timezone)
-    start_date = temp_end_date
+    start_date = temp_end_date + one_second
 
 def update_diary_day(users, user_id, task_name, tz_start_time, tz_end_time, timezone):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)
