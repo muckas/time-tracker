@@ -9,6 +9,8 @@ import constants
 
 log = logging.getLogger('main')
 
+temp_vars = {}
+
 def timezoned(users, user_id, timestamp):
   delta = 60 * 60 * users[user_id]['timezone']
   return timestamp + delta
@@ -135,17 +137,43 @@ def get_task_stats(users, user_id):
     Total time: {time_total} ~ {time_total_hours:.1f} hours'''
   return report
 
+def convert_interval_to_seconds(text):
+  with suppress(ValueError):
+    time_interval = int(text[:-1])
+    time_type = text[-1:]
+    if time_type == 's':
+      return time_interval
+    if time_type == 'm':
+      return time_interval * 60
+    if time_type == 'h':
+      return time_interval * 60 * 60
+    if time_type == 'd':
+      return time_interval * 60 * 60 * 24
+  return None
+
 def menu_handler(user_id, text):
   users = db.read('users')
   state = users[user_id]['state']
 
   # STATE - start_task
   if state == 'start_task':
-    task_name = text
+    # Retroactive task starting
+    if text == constants.get_name('now'):
+      start_time = int(time.time())
+    else:
+      time_interval = convert_interval_to_seconds(text)
+      if time_interval:
+        start_time = max(int(time.time()) - time_interval, users[user_id]['last_task_end_time'])
+      else:
+        tgbot.send_message(user_id, f'Incorrect time "{text}"', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
+        return
+
+    task_name = temp_vars[user_id]['desired_task']
     if task_name in users[user_id]['tasks'].keys():
       users[user_id]['active_task'] = {
           'name': task_name,
-          'start_time':int(time.time())
+          'start_time':start_time
           }
       db.write('users',users)
       tgbot.send_message(user_id, f'Started {task_name}', keyboard=get_main_menu(users, user_id))
@@ -153,6 +181,14 @@ def menu_handler(user_id, text):
     else:
       tgbot.send_message(user_id, f'Task {task_name} does not exist', keyboard=get_main_menu(users, user_id))
       change_state(users, user_id, 'main_menu')
+
+  # STATE - start_task_time
+  if state == 'start_task_time':
+    task_name = text
+    temp_vars.update({user_id:{'desired_task':task_name}})
+    keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+    tgbot.send_message(user_id, f'When to start {task_name}?', keyboard=keyboard)
+    change_state(users, user_id, 'start_task')
 
   # STATE - add_task
   elif state == 'add_task':
@@ -224,7 +260,7 @@ def menu_handler(user_id, text):
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
-        change_state(users, user_id, 'start_task')
+        change_state(users, user_id, 'start_task_time')
       else:
         tgbot.send_message(user_id, "You don't have any tasks")
 
