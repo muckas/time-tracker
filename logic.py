@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import datetime
+from contextlib import suppress
 import db
 import tgbot
 import constants
@@ -26,6 +27,16 @@ def get_main_menu(users, user_id):
       ]
   if users[user_id]['timezone'] == None:
     keyboard[0] = [constants.get_name('set_timezone')]
+  return keyboard
+
+def get_options_keyboard(options, columns=2):
+  keyboard = []
+  for index in range(0, len(options), columns):
+    row = []
+    for offset in range(columns):
+      with suppress(IndexError):
+        row.append(options[index+offset])
+    keyboard.append(row)
   return keyboard
 
 def enable_menu(user_id):
@@ -211,9 +222,7 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('start_task'):
       tasks = get_enabled_tasks(users, user_id)
       if tasks:
-        keyboard = []
-        for task in tasks:
-          keyboard.append([task])
+        keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'start_task')
       else:
@@ -226,9 +235,7 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('remove_task'):
       tasks = get_enabled_tasks(users, user_id)
       if tasks:
-        keyboard = []
-        for task in tasks:
-          keyboard.append([task])
+        keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to remove\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'remove_task')
       else:
