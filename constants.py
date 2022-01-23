@@ -1,5 +1,12 @@
 import time
 
+def get_temp_vars():
+  return {
+      'desired_task':None,
+      'timer_message':None,
+      'timer_start':None,
+      }
+
 def get_default_user(tg_username):
   return {
       'username':tg_username,

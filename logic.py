@@ -15,6 +15,24 @@ def timezoned(users, user_id, timestamp):
   delta = 60 * 60 * users[user_id]['timezone']
   return timestamp + delta
 
+def update_timer(user_id, message, start_time, task_name):
+  timer = int(time.time()) - start_time
+  timer = datetime.timedelta(seconds=timer)
+  text = f'{task_name}\n{timer}'
+  message.edit_text(text)
+  # log.debug(f'Updated timer for user {user_id}: {text}')
+
+def get_new_timer(user_id):
+  users = db.read('users')
+  if users[user_id]['active_task']:
+    message = tgbot.send_message(user_id, 'Timer')
+    task_name = users[user_id]['active_task']['name']
+    start_time = users[user_id]['active_task']['start_time']
+    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time, 'desired_task':task_name})
+    update_timer(user_id, message, start_time, task_name)
+  else:
+    tgbot.send_message(user_id, 'No task is active')
+
 def get_main_menu(users, user_id):
   active_task = users[user_id]['active_task']
   if active_task:
@@ -64,6 +82,7 @@ def get_enabled_tasks(users, user_id):
   return enabled_tasks
 
 def stop_task(users, user_id, task_name):
+  temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'desired_task':None})
   task_start_time = users[user_id]['active_task']['start_time']
   task_end_time = int(time.time())
   write_task_to_diary(users, user_id, task_name, task_start_time, task_end_time)
@@ -154,6 +173,9 @@ def convert_interval_to_seconds(text):
 def menu_handler(user_id, text):
   users = db.read('users')
   state = users[user_id]['state']
+  # Init temp_vars
+  if user_id not in temp_vars:
+    temp_vars.update({user_id:constants.get_temp_vars()})
 
   # STATE - start_task
   if state == 'start_task':
@@ -178,6 +200,9 @@ def menu_handler(user_id, text):
       db.write('users',users)
       tgbot.send_message(user_id, f'Started {task_name}', keyboard=get_main_menu(users, user_id))
       change_state(users, user_id, 'main_menu')
+      message = tgbot.send_message(user_id, f'Timer')
+      update_timer(user_id, message, start_time, task_name)
+      temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time})
     else:
       tgbot.send_message(user_id, f'Task {task_name} does not exist', keyboard=get_main_menu(users, user_id))
       change_state(users, user_id, 'main_menu')
@@ -185,7 +210,8 @@ def menu_handler(user_id, text):
   # STATE - start_task_time
   if state == 'start_task_time':
     task_name = text
-    temp_vars.update({user_id:{'desired_task':task_name}})
+    temp_vars[user_id].update({'desired_task':task_name})
+    print(temp_vars)
     keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
     tgbot.send_message(user_id, f'When to start {task_name}?', keyboard=keyboard)
     change_state(users, user_id, 'start_task')

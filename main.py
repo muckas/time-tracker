@@ -11,6 +11,7 @@ from telegram.ext import CommandHandler, MessageHandler, Filters
 import db
 import traceback
 import tgbot
+import logic
 
 VERSION = '0.4.0'
 NAME = 'Time Tracker'
@@ -65,8 +66,18 @@ except Exception:
   sys.exit(2)
 
 def mainloop():
-    while True:
-      pass
+  update_interval = 5
+  while True:
+    # log.debug('Starting update...')
+    # Timer update
+    for user_id in logic.temp_vars:
+      message = logic.temp_vars[user_id]['timer_message']
+      start_time = logic.temp_vars[user_id]['timer_start']
+      task_name = logic.temp_vars[user_id]['desired_task']
+      if message and start_time and task_name:
+        logic.update_timer(user_id, message, start_time, task_name)
+    # log.debug(f'Update complete, sleeping for {update_interval} seconds')
+    time.sleep(update_interval)
 
 if __name__ == '__main__':
   try:
@@ -95,5 +106,5 @@ if __name__ == '__main__':
     log.error((traceback.format_exc()))
     admin_id = db.read('params')['admin']
     if admin_id:
-      tgbot.send_message(admin_id, f'Exception: {e}', silent=True)
+      tg.send_message(admin_id, f'Exception: {e}', disable_notification=True)
     sys.exit(2)
