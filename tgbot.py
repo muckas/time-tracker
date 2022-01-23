@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 from contextlib import suppress
 import telegram
@@ -25,8 +26,9 @@ def send_message(user_id, text, silent=True, keyboard=None):
       reply_markup = ReplyKeyboardRemove()
     else:
       reply_markup = ReplyKeyboardMarkup(keyboard)
-  tg.send_message(chat_id=user_id, text=text, disable_notification=silent, reply_markup=reply_markup)
+  message = tg.send_message(chat_id=user_id, text=text, disable_notification=silent, reply_markup=reply_markup)
   log.info(f'Message to @{username}({user_id}):{text}')
+  return message
 
 def log_message(update):
   user_id = str(update.message.chat['id'])
@@ -90,6 +92,12 @@ def command_menu(update, context):
   if validated(update):
     logic.enable_menu(user_id)
 
+def command_timer(update, context):
+  log_message(update)
+  user_id = str(update.message.chat['id'])
+  if validated(update):
+    logic.get_new_timer(user_id)
+
 def error_handler(update, context):
   log.warning(msg="Exception while handling an update:", exc_info=context.error)
 
@@ -102,6 +110,7 @@ def start(tg_token):
   dispatcher.add_handler(CommandHandler('help', command_help))
   dispatcher.add_handler(CommandHandler('menu', command_menu))
   dispatcher.add_handler(CommandHandler('cancel', command_menu))
+  dispatcher.add_handler(CommandHandler('timer', command_timer))
   dispatcher.add_error_handler(error_handler)
   updater.start_polling()
   log.info('Telegram bot started')
