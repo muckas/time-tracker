@@ -13,7 +13,7 @@ import traceback
 import tgbot
 import logic
 
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 NAME = 'Time Tracker'
 
 # Logger setup
@@ -66,7 +66,7 @@ except Exception:
   sys.exit(2)
 
 def mainloop():
-  update_interval = 5
+  update_interval = db.read('params')['update_interval']
   while True:
     # log.debug('Starting update...')
     # Timer update
@@ -90,9 +90,10 @@ if __name__ == '__main__':
       log.info(f'Created {path} folder')
     admin_id = params['admin']
     if admin_id:
-      msg = f'{NAME} v{VERSION}\n'
+      msg = f'{NAME} v{VERSION}'
+      msg += f'\nUpdate interval: {params["update_interval"]}'
       if params['use_whitelist']:
-        msg += f'Whitelist enabled, users:'
+        msg += f'\nWhitelist enabled, users:'
         for user in whitelist:
           msg += f'\n  {user}'
       else:
