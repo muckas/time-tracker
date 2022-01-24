@@ -84,7 +84,7 @@ def check_data():
       diary = db.read(db_name)
       for key in default_diary:
         if key not in diary.keys():
-          missing_total += 1
+          missing_local += 1
           value = default_diary[key]
           diary[key] = value
           log.info(f'Missing key "{key}", adding {key}:{value}')
