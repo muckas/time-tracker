@@ -1,9 +1,30 @@
 import os
 import json
 import logging
+import shutil
+import datetime
 from contextlib import suppress
 
 log = logging.getLogger('main')
+
+def archive(filename='backup', folder='backup', max_backups=3):
+  log.info('Backing up db...')
+  with suppress(FileExistsError):
+    os.makedirs(folder)
+    log.info(f'Created {folder} folder')
+  date = datetime.datetime.now().date()
+  path = os.path.join(folder, f'{filename}-{date}')
+  shutil.make_archive(base_name=path, format='zip', base_dir='db', logger=log)
+  log.info(f'Backup complete: {path}')
+  while True: # Remove old files
+    files = os.listdir(folder)
+    files = [os.path.join(folder, f) for f in files] # add path to each file
+    files.sort(key=lambda x: os.path.getmtime(x))
+    if len(files) > max_backups:
+      log.info(f'Found more than {max_backups} backups, removing {files[0]}')
+      os.remove(files[0])
+    else:
+      break
 
 def init(name):
   with suppress(FileExistsError):
