@@ -230,11 +230,7 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'main_menu')
     else: # adding task to db
       users[user_id]['tasks'].update(
-          {task_name:{
-            'enabled':True,
-            'date_added':int(time.time()),
-            'time_total':0,
-            }}
+          {task_name:constants.get_default_task()}
           )
       db.write('users', users)
       tgbot.send_message(user_id, f'Added task "{task_name}"', keyboard=get_main_menu(users, user_id))
