@@ -81,10 +81,18 @@ def get_enabled_tasks(users, user_id):
       enabled_tasks.append(task)
   return enabled_tasks
 
-def stop_task(users, user_id, task_name):
+def stop_task(users, user_id, task_name, time_text):
   temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'desired_task':None})
   task_start_time = users[user_id]['active_task']['start_time']
-  task_end_time = int(time.time())
+  # Retroactive task stopping
+  if time_text == constants.get_name('now'):
+    task_end_time = int(time.time())
+  else:
+    time_interval = convert_interval_to_seconds(time_text)
+    if time_interval:
+      task_end_time = max(int(time.time()) - time_interval, task_start_time+1)
+    else:
+      return None
   write_task_to_diary(users, user_id, task_name, task_start_time, task_end_time)
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
@@ -212,10 +220,23 @@ def menu_handler(user_id, text):
   if state == 'start_task_time':
     task_name = text
     temp_vars[user_id].update({'desired_task':task_name})
-    print(temp_vars)
     keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
     tgbot.send_message(user_id, f'When to start {task_name}?', keyboard=keyboard)
     change_state(users, user_id, 'start_task')
+
+  if state == 'stop_task':
+    time_interval = text
+    if users[user_id]['active_task']:
+      task_name = users[user_id]['active_task']['name']
+      task_duration = stop_task(users, user_id, task_name, time_interval)
+      if task_duration != None:
+        tgbot.send_message(user_id, f'Stopped {task_name}\nTime taken: {task_duration}', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
+      else:
+        tgbot.send_message(user_id, f'Incorrect time "{text}"', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
+    else:
+      tgbot.send_message(user_id, f'No task is active', keyboard=get_main_menu(users, user_id))
 
   # STATE - add_task
   elif state == 'add_task':
@@ -304,14 +325,11 @@ def menu_handler(user_id, text):
       stop_string = constants.get_name('stop')
       stop_string_len = len(stop_string)
       # removing active task
-      if button_name[:stop_string_len] == stop_string:
-        task_name = button_name[stop_string_len:]
-        if users[user_id]['active_task']:
-          if users[user_id]['active_task']['name'] == task_name:
-            task_duration = stop_task(users, user_id, task_name)
-            tgbot.send_message(user_id, f'Stopped {task_name}\nTime taken: {task_duration}', keyboard=get_main_menu(users, user_id))
-        else:
-          tgbot.send_message(user_id, f'Task "{task_name}" is not active', keyboard=get_main_menu(users, user_id))
+      if button_name[:stop_string_len] == stop_string: # stop_task
+        task_name = users[user_id]['active_task']['name']
+        keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+        tgbot.send_message(user_id, f'When to stop {task_name}?', keyboard=keyboard)
+        change_state(users, user_id, 'stop_task')
 
     if button_name == constants.get_name('task_stats'):
       tgbot.send_message(user_id, get_task_stats(users ,user_id), keyboard=get_main_menu(users, user_id))
