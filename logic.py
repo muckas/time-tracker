@@ -157,6 +157,7 @@ def get_task_stats(users, user_id):
   return report
 
 def convert_interval_to_seconds(text):
+  if text[:1] == '-': text = text[1:]
   with suppress(ValueError):
     time_interval = int(text[:-1])
     time_type = text[-1:]

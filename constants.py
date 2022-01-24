@@ -45,10 +45,10 @@ def get_name(name):
 
 def get_time_presets():
   return [
-      '5m',
-      '10m',
-      '20m',
-      '30m',
-      '1h',
-      '2h',
+      '-5m',
+      '-10m',
+      '-20m',
+      '-30m',
+      '-1h',
+      '-2h',
       ]
