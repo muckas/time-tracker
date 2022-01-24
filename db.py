@@ -16,15 +16,16 @@ def archive(filename='backup', folder='backup', max_backups=3):
   path = os.path.join(folder, f'{filename}-{date}')
   shutil.make_archive(base_name=path, format='zip', base_dir='db', logger=log)
   log.info(f'Backup complete: {path}')
-  while True: # Remove old files
-    files = os.listdir(folder)
-    files = [os.path.join(folder, f) for f in files] # add path to each file
-    files.sort(key=lambda x: os.path.getmtime(x))
-    if len(files) > max_backups:
-      log.info(f'Found more than {max_backups} backups, removing {files[0]}')
-      os.remove(files[0])
-    else:
-      break
+  if max_backups:
+    while True: # Remove old files
+      files = os.listdir(folder)
+      files = [os.path.join(folder, f) for f in files] # add path to each file
+      files.sort(key=lambda x: os.path.getmtime(x))
+      if len(files) > max_backups:
+        log.info(f'Found more than {max_backups} backups, removing {files[0]}')
+        os.remove(files[0])
+      else:
+        break
 
 def init(name):
   with suppress(FileExistsError):
