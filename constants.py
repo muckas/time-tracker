@@ -5,6 +5,7 @@ def get_temp_vars():
       'desired_task':None,
       'timer_message':None,
       'timer_start':None,
+      'stats_delta':0,
       }
 
 def get_default_user(tg_username):
@@ -15,6 +16,7 @@ def get_default_user(tg_username):
       'last_task_end_time':int(time.time()),
       'active_task':{},
       'tasks':{},
+      'stats_type':'alltime',
       }
 
 def get_default_task():
