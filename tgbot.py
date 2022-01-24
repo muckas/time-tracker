@@ -16,12 +16,10 @@ tg = None
 
 help_text = '''I am sorry, but there's nothing I can help you with...'''
 
-def send_message(user_id, text, silent=True, keyboard=None):
+def send_message(user_id, text, silent=True, keyboard=None, reply_markup=None):
   users = db.read('users')
   username = users[user_id]['username']
-  if keyboard == None:
-    reply_markup = None
-  else:
+  if keyboard:
     if keyboard == []:
       reply_markup = ReplyKeyboardRemove()
     else:
@@ -98,6 +96,17 @@ def command_timer(update, context):
   if validated(update):
     logic.get_new_timer(user_id)
 
+def callback_handler(update, context):
+  users = db.read('users')
+  query = update.callback_query
+  user_id = str(query.message.chat_id)
+  function, option = query.data.split(':')
+  if function == 'task_stats':
+    report, reply_markup = logic.get_task_stats(users, user_id, option)
+    with suppress(telegram.error.BadRequest):
+      query.edit_message_text(text=report, reply_markup=reply_markup)
+  query.answer()
+
 def error_handler(update, context):
   log.warning(msg="Exception while handling an update:", exc_info=context.error)
 
@@ -111,6 +120,7 @@ def start(tg_token):
   dispatcher.add_handler(CommandHandler('menu', command_menu))
   dispatcher.add_handler(CommandHandler('cancel', command_menu))
   dispatcher.add_handler(CommandHandler('timer', command_timer))
+  dispatcher.add_handler(CallbackQueryHandler(callback_handler))
   dispatcher.add_error_handler(error_handler)
   updater.start_polling()
   log.info('Telegram bot started')

@@ -6,6 +6,7 @@ from contextlib import suppress
 import db
 import tgbot
 import constants
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 log = logging.getLogger('main')
 
@@ -150,19 +151,98 @@ def update_diary_day(users, user_id, task_name, tz_start_time, tz_end_time, time
       )
   db.write(diary_path, diary)
 
-def get_task_stats(users, user_id):
-  tasks = get_enabled_tasks(users, user_id)
-  report = 'Total task statistics\n--------------------'
-  for task in tasks:
-    task_info = users[user_id]['tasks'][task]
-    date_added = timezoned(users, user_id, task_info['date_added'])
-    date_added = datetime.datetime.utcfromtimestamp(date_added)
-    time_total = datetime.timedelta(seconds=task_info['time_total'])
-    time_total_hours = task_info['time_total'] / 60 / 60
-    report += f'''\n{task}
-    Date added: {date_added}
-    Total time: {time_total} ~ {time_total_hours:.1f} hours'''
-  return report
+def get_task_stats(users, user_id, option=None):
+  stats_delta = temp_vars[user_id]['stats_delta']
+  stats_type = users[user_id]['stats_type']
+  if option == 'alltime':
+    stats_type = 'alltime'
+    users[user_id]['stats_type'] = stats_type
+    db.write('users', users)
+  elif option == 'month':
+    stats_type = 'month'
+    users[user_id]['stats_type'] = stats_type
+    db.write('users', users)
+  elif option == 'day':
+    stats_type = 'day'
+    users[user_id]['stats_type'] = stats_type
+    db.write('users', users)
+  elif option == 'left':
+    stats_delta += 1
+    temp_vars[user_id]['stats_delta'] = stats_delta
+  elif option == 'right' and stats_delta > 0:
+    stats_delta -= 1
+    temp_vars[user_id]['stats_delta'] = stats_delta
+
+  if stats_type == 'alltime':
+    tasks = get_enabled_tasks(users, user_id)
+    report = 'All time statistics:\n--------------------'
+    for task in tasks:
+      task_info = users[user_id]['tasks'][task]
+      date_added = timezoned(users, user_id, task_info['date_added'])
+      date_added = datetime.datetime.utcfromtimestamp(date_added)
+      time_total = datetime.timedelta(seconds=task_info['time_total'])
+      time_total_hours = task_info['time_total'] / 60 / 60
+      report += f'''\n{task}
+      Date added: {date_added}
+      Total time: {time_total} ~ {time_total_hours:.1f} hours'''
+    keyboard = [
+        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
+        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return report, reply_markup
+
+  elif stats_type == 'month':
+    timedelta = datetime.timedelta(days=30 * stats_delta)
+    date = datetime.datetime.now() - timedelta
+    filename = f'{date.year}-{date.month}-{user_id}'
+    report = f'Month statistics: {date.year}-{date.month}\n--------------------'
+    diary = db.read(os.path.join('data', user_id, filename))
+    if diary:
+      for task_name in diary['tasks_total']:
+        task_time = diary['tasks_total'][task_name]
+        time_total = datetime.timedelta(seconds=task_time)
+        time_total_hours = task_time / 60 / 60
+        report += f'\n{task_name}: {time_total} ~ {time_total_hours:.1f} hours'
+    else:
+      report += f'\nNo data for {date.year}-{date.month}'
+    keyboard = [
+        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
+        [InlineKeyboardButton('Alltime', callback_data='task_stats:alltime')],
+        [
+          InlineKeyboardButton('<', callback_data='task_stats:left'),
+          InlineKeyboardButton('>', callback_data='task_stats:right'),
+          ]
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return report, reply_markup
+  elif stats_type == 'day':
+    timedelta = datetime.timedelta(days=stats_delta)
+    date = datetime.datetime.now() - timedelta
+    filename = f'{date.year}-{date.month}-{user_id}'
+    report = f'Day statistics: {date.year}-{date.month}-{date.day}\n--------------------'
+    diary = db.read(os.path.join('data', user_id, filename))
+    day = str(date.day)
+    if diary and day in diary['days'].keys():
+      for task_name in diary['days'][day]['tasks_total']:
+        task_time = diary['days'][day]['tasks_total'][task_name]
+        time_total = datetime.timedelta(seconds=task_time)
+        time_total_hours = task_time / 60 / 60
+        report += f'\n{task_name}: {time_total} ~ {time_total_hours:.1f} hours'
+    else:
+      report += f'\nNo data for {date.year}-{date.month}-{date.day}'
+    keyboard = [
+        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        [InlineKeyboardButton('Alltime', callback_data='task_stats:alltime')],
+        [
+          InlineKeyboardButton('<', callback_data='task_stats:left'),
+          InlineKeyboardButton('>', callback_data='task_stats:right'),
+          ]
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return report, reply_markup
+  else:
+    return 'Wrong query data', None
 
 def convert_interval_to_seconds(text):
   if text[:1] == '-': text = text[1:]
@@ -332,4 +412,6 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'stop_task')
 
     if button_name == constants.get_name('task_stats'):
-      tgbot.send_message(user_id, get_task_stats(users ,user_id), keyboard=get_main_menu(users, user_id))
+      temp_vars[user_id]['stats_delta'] = 0
+      report, reply_markup = get_task_stats(users ,user_id, users[user_id]['stats_type'])
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
