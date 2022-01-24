@@ -17,6 +17,13 @@ def get_default_user(tg_username):
       'tasks':{},
       }
 
+def get_default_task():
+  return {
+      'enabled': True,
+      'date_added': int(time.time()),
+      'time_total': 0,
+      }
+
 def get_defaul_diary():
   return {
       'tasks_total':{},
@@ -45,10 +52,10 @@ def get_name(name):
 
 def get_time_presets():
   return [
-      '5m',
-      '10m',
-      '20m',
-      '30m',
-      '1h',
-      '2h',
+      '-5m',
+      '-10m',
+      '-20m',
+      '-30m',
+      '-1h',
+      '-2h',
       ]

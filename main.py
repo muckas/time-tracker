@@ -13,7 +13,7 @@ import traceback
 import tgbot
 import logic
 
-VERSION = '0.4.1'
+VERSION = '0.5.0'
 NAME = 'Time Tracker'
 
 # Logger setup
@@ -66,9 +66,16 @@ except Exception:
   sys.exit(2)
 
 def mainloop():
-  update_interval = db.read('params')['update_interval']
+  params = db.read('params')
+  update_interval = params['update_interval']
+  last_backup = params['last_backup']
   while True:
-    # log.debug('Starting update...')
+    # Backup check
+    date = datetime.datetime.now().date()
+    if str(date) != params['last_backup']:
+      db.archive(filename='time-tracker', max_backups=10)
+      params['last_backup'] = str(date)
+      db.write('params', params)
     # Timer update
     for user_id in logic.temp_vars:
       message = logic.temp_vars[user_id]['timer_message']
@@ -84,6 +91,11 @@ if __name__ == '__main__':
     db.init('users')
     params = db.init('params')
     whitelist = db.init('whitelist')
+    date = datetime.datetime.now().date()
+    if str(date) != params['last_backup']:
+      db.archive(filename='time-tracker', max_backups=10)
+      params['last_backup'] = str(date)
+      db.write('params', params)
     with suppress(FileExistsError):
       path = os.path.join('db', 'data')
       os.makedirs(path)
