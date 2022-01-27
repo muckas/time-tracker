@@ -7,7 +7,7 @@ from contextlib import suppress
 
 log = logging.getLogger('main')
 
-def archive(filename='backup', folder='backup', max_backups=3):
+def archive(filename='backup', folder='backup', max_backups=0):
   log.info('Backing up db...')
   with suppress(FileExistsError):
     os.makedirs(folder)
