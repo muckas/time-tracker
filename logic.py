@@ -12,6 +12,10 @@ log = logging.getLogger('main')
 
 temp_vars = {}
 
+def check_temp_vars(user_id):
+  if user_id not in temp_vars:
+    temp_vars.update({user_id:constants.get_temp_vars()})
+
 def timezoned(users, user_id, timestamp):
   delta = 60 * 60 * users[user_id]['timezone']
   return timestamp + delta
@@ -60,8 +64,7 @@ def get_options_keyboard(options, columns=2):
     keyboard.append(row)
   return keyboard
 
-def enable_menu(user_id):
-  users = db.read('users')
+def enable_menu(users, user_id):
   change_state(users, user_id, 'main_menu')
   tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
 
@@ -69,9 +72,8 @@ def disable_menu(user_id):
   tgbot.send_message(user_id, 'Menu disabled', keyboard=[])
 
 def change_state(users, user_id, new_state):
-  users[user_id]['state'] = new_state
+  temp_vars[user_id]['state'] = new_state
   username = users[user_id]['username']
-  db.write('users', users)
   log.debug(f'New state "{new_state}" for user @{username}({user_id})')
 
 def get_enabled_tasks(users, user_id):
@@ -307,10 +309,7 @@ def convert_interval_to_seconds(text):
 
 def menu_handler(user_id, text):
   users = db.read('users')
-  state = users[user_id]['state']
-  # Init temp_vars
-  if user_id not in temp_vars:
-    temp_vars.update({user_id:constants.get_temp_vars()})
+  state = temp_vars[user_id]['state']
 
   # STATE - start_task
   if state == 'start_task':
@@ -437,6 +436,11 @@ def menu_handler(user_id, text):
       else:
         tgbot.send_message(user_id, "You don't have any tasks")
 
+    elif button_name == constants.get_name('task_stats'):
+      temp_vars[user_id]['stats_delta'] = 0
+      report, reply_markup = get_task_stats(users ,user_id, users[user_id]['stats_type'])
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+
     else: # Checking for "Stop {task}"
       stop_string = constants.get_name('stop')
       stop_string_len = len(stop_string)
@@ -446,8 +450,6 @@ def menu_handler(user_id, text):
         keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
         tgbot.send_message(user_id, f'When to stop {task_name}?', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
-
-    if button_name == constants.get_name('task_stats'):
-      temp_vars[user_id]['stats_delta'] = 0
-      report, reply_markup = get_task_stats(users ,user_id, users[user_id]['stats_type'])
-      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+      else:
+        tgbot.send_message(user_id, 'Error, try again')
+        enable_menu(users, user_id)

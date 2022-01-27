@@ -19,7 +19,7 @@ help_text = '''I am sorry, but there's nothing I can help you with...'''
 def send_message(user_id, text, silent=True, keyboard=None, reply_markup=None):
   users = db.read('users')
   username = users[user_id]['username']
-  if keyboard:
+  if keyboard != None:
     if keyboard == []:
       reply_markup = ReplyKeyboardRemove()
     else:
@@ -70,13 +70,15 @@ def message_handler(update, context):
   user_id = str(update.message.chat['id'])
   if validated(update):
     text = update.message.text
+    logic.check_temp_vars(user_id)
     logic.menu_handler(user_id, text)
 
 def command_start(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
-    logic.enable_menu(user_id)
+    logic.check_temp_vars(user_id)
+    logic.enable_menu(users, user_id)
 
 def command_help(update, context):
   log_message(update)
@@ -88,20 +90,21 @@ def command_menu(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
-    logic.enable_menu(user_id)
+    logic.check_temp_vars(user_id)
+    logic.enable_menu(users, user_id)
 
 def command_timer(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
-    if user_id not in logic.temp_vars:
-      logic.temp_vars.update({user_id:constants.get_temp_vars()})
+    logic.check_temp_vars(user_id)
     logic.get_new_timer(user_id)
 
 def callback_handler(update, context):
   users = db.read('users')
   query = update.callback_query
   user_id = str(query.message.chat_id)
+  logic.check_temp_vars(user_id)
   function, option = query.data.split(':')
   if function == 'task_stats':
     report, reply_markup = logic.get_task_stats(users, user_id, option)

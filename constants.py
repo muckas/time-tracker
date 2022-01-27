@@ -2,6 +2,7 @@ import time
 
 def get_temp_vars():
   return {
+      'state':'main_menu',
       'desired_task':None,
       'timer_message':None,
       'timer_start':None,
@@ -12,7 +13,6 @@ def get_default_user(tg_username):
   return {
       'username':tg_username,
       'timezone':None,
-      'state':'main_menu',
       'last_task_end_time':int(time.time()),
       'active_task':{},
       'tasks':{},
