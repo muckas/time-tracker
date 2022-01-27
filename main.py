@@ -77,12 +77,7 @@ def mainloop():
       params['last_backup'] = str(date)
       db.write('params', params)
     # Timer update
-    for user_id in logic.temp_vars:
-      message = logic.temp_vars[user_id]['timer_message']
-      start_time = logic.temp_vars[user_id]['timer_start']
-      task_name = logic.temp_vars[user_id]['desired_task']
-      if message and start_time and task_name:
-        logic.update_timer(user_id, message, start_time, task_name)
+    logic.update_all_timers()
     # log.debug(f'Update complete, sleeping for {update_interval} seconds')
     time.sleep(update_interval)
 

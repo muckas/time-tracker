@@ -27,6 +27,14 @@ def update_timer(user_id, message, start_time, task_name):
   message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
 
+def update_all_timers():
+  for user_id in temp_vars:
+    message = temp_vars[user_id]['timer_message']
+    start_time = temp_vars[user_id]['timer_start']
+    task_name = temp_vars[user_id]['desired_task']
+    if message and start_time and task_name:
+      update_timer(user_id, message, start_time, task_name)
+
 def get_new_timer(user_id):
   users = db.read('users')
   if users[user_id]['active_task']:
@@ -345,7 +353,7 @@ def menu_handler(user_id, text):
     task_name = text
     temp_vars[user_id].update({'desired_task':task_name})
     keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
-    tgbot.send_message(user_id, f'When to start {task_name}?', keyboard=keyboard)
+    tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
     change_state(users, user_id, 'start_task')
 
   if state == 'stop_task':
@@ -448,7 +456,7 @@ def menu_handler(user_id, text):
       if button_name[:stop_string_len] == stop_string: # stop_task
         task_name = users[user_id]['active_task']['name']
         keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
-        tgbot.send_message(user_id, f'When to stop {task_name}?', keyboard=keyboard)
+        tgbot.send_message(user_id, f'When to stop {task_name}?\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
       else:
         tgbot.send_message(user_id, 'Error, try again')

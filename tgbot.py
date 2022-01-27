@@ -89,6 +89,7 @@ def command_help(update, context):
 def command_menu(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
+  users = db.read('users')
   if validated(update):
     logic.check_temp_vars(user_id)
     logic.enable_menu(users, user_id)
