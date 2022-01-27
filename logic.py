@@ -154,6 +154,8 @@ def update_diary_day(users, user_id, task_name, tz_start_time, tz_end_time, time
 def get_task_stats(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
   stats_type = users[user_id]['stats_type']
+  timezone = users[user_id]['timezone']
+  tzdelta = datetime.timezone(datetime.timedelta(hours=timezone))
   if option == 'alltime':
     stats_type = 'alltime'
     users[user_id]['stats_type'] = stats_type
@@ -194,7 +196,7 @@ def get_task_stats(users, user_id, option=None):
 
   elif stats_type == 'month':
     timedelta = datetime.timedelta(days=30 * stats_delta)
-    date = datetime.datetime.now() - timedelta
+    date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{date.year}-{date.month}-{user_id}'
     report = f'Month statistics: {date.year}-{date.month}\n--------------------'
     diary = db.read(os.path.join('data', user_id, filename))
@@ -218,7 +220,7 @@ def get_task_stats(users, user_id, option=None):
     return report, reply_markup
   elif stats_type == 'day':
     timedelta = datetime.timedelta(days=stats_delta)
-    date = datetime.datetime.now() - timedelta
+    date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{date.year}-{date.month}-{user_id}'
     report = f'Day statistics: {date.year}-{date.month}-{date.day}\n--------------------'
     diary = db.read(os.path.join('data', user_id, filename))
