@@ -82,6 +82,25 @@ def get_enabled_tasks(users, user_id):
       enabled_tasks.append(task)
   return enabled_tasks
 
+def get_all_tasks(users, user_id):
+  return users[user_id]['tasks'].keys()
+
+def add_task(users, user_id, task_name, enabled=True):
+  if task_name in users[user_id]['tasks'].keys():
+    if users[user_id]['tasks'][task_name]['enabled']:
+      return None
+    else:
+      users[user_id]['tasks'][task_name]['enabled'] = True
+      db.write('users',users)
+      return f'Enabled task "{task_name}"'
+  else: # adding task to db
+    users[user_id]['tasks'].update(
+        {task_name:constants.get_default_task()}
+        )
+    users[user_id]['tasks'][task_name]['enabled'] = enabled
+    db.write('users', users)
+    return f'Added task "{task_name}"'
+
 def stop_task(users, user_id, task_name, time_text):
   temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'desired_task':None})
   task_start_time = users[user_id]['active_task']['start_time']
@@ -180,15 +199,17 @@ def get_task_stats(users, user_id, option=None):
     temp_vars[user_id]['stats_delta'] = stats_delta
 
   if stats_type == 'detailed':
-    tasks = get_enabled_tasks(users, user_id)
-    report = 'All time statistics:\n--------------------'
+    tasks = get_all_tasks(users, user_id)
+    report = 'Detailed statistics:\n--------------------'
     for task in tasks:
       task_info = users[user_id]['tasks'][task]
       date_added = timezoned(users, user_id, task_info['date_added'])
       date_added = datetime.datetime.utcfromtimestamp(date_added)
       time_total = datetime.timedelta(seconds=task_info['time_total'])
       time_total_hours = task_info['time_total'] / 60 / 60
-      report += f'''\n{task}
+      task_status = ''
+      if not task_info['enabled']: task_status = '(disabled)'
+      report += f'''\n{task}{task_status}
       Date added: {date_added}
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
@@ -201,7 +222,7 @@ def get_task_stats(users, user_id, option=None):
 
   elif stats_type == 'alltime':
     tasks = get_enabled_tasks(users, user_id)
-    report = 'Detailed statistics:\n--------------------'
+    report = 'All time statistics:\n--------------------'
     for task in tasks:
       task_info = users[user_id]['tasks'][task]
       time_total = datetime.timedelta(seconds=task_info['time_total'])
@@ -306,20 +327,19 @@ def menu_handler(user_id, text):
         return
 
     task_name = temp_vars[user_id]['desired_task']
-    if task_name in users[user_id]['tasks'].keys():
-      users[user_id]['active_task'] = {
-          'name': task_name,
-          'start_time':start_time
-          }
-      db.write('users',users)
-      tgbot.send_message(user_id, f'Started {task_name}', keyboard=get_main_menu(users, user_id))
-      change_state(users, user_id, 'main_menu')
-      message = tgbot.send_message(user_id, f'Timer')
-      update_timer(user_id, message, start_time, task_name)
-      temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time})
-    else:
-      tgbot.send_message(user_id, f'Task {task_name} does not exist', keyboard=get_main_menu(users, user_id))
-      change_state(users, user_id, 'main_menu')
+    if task_name not in users[user_id]['tasks'].keys():
+      add_task(users, user_id, task_name, enabled=False)
+      tgbot.send_message(user_id, f'Added custom task {task_name}')
+    users[user_id]['active_task'] = {
+        'name': task_name,
+        'start_time':start_time
+        }
+    db.write('users',users)
+    tgbot.send_message(user_id, f'Started {task_name}', keyboard=get_main_menu(users, user_id))
+    change_state(users, user_id, 'main_menu')
+    message = tgbot.send_message(user_id, f'Timer')
+    update_timer(user_id, message, start_time, task_name)
+    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time})
 
   # STATE - start_task_time
   if state == 'start_task_time':
@@ -346,21 +366,12 @@ def menu_handler(user_id, text):
   # STATE - add_task
   elif state == 'add_task':
     task_name = text
-    if task_name in users[user_id]['tasks'].keys():
-      if users[user_id]['tasks'][task_name]['enabled']:
-        tgbot.send_message(user_id, f'Task "{task_name}" already exists\nChoose another name\n/cancel')
-      else:
-        users[user_id]['tasks'][task_name]['enabled'] = True
-        db.write('users',users)
-        tgbot.send_message(user_id, f'Added task "{task_name}" again', keyboard=get_main_menu(users, user_id))
-        change_state(users, user_id, 'main_menu')
-    else: # adding task to db
-      users[user_id]['tasks'].update(
-          {task_name:constants.get_default_task()}
-          )
-      db.write('users', users)
-      tgbot.send_message(user_id, f'Added task "{task_name}"', keyboard=get_main_menu(users, user_id))
+    result = add_task(users, user_id, task_name)
+    if result:
+      tgbot.send_message(user_id, result, keyboard=get_main_menu(users, user_id))
       change_state(users, user_id, 'main_menu')
+    else:
+      tgbot.send_message(user_id, f'Task "{task_name}" already exists\nChoose another name\n/cancel')
 
   # STATE - remove_task
   elif state == 'remove_task':
