@@ -31,7 +31,7 @@ def update_all_timers():
   for user_id in temp_vars:
     message = temp_vars[user_id]['timer_message']
     start_time = temp_vars[user_id]['timer_start']
-    task_name = temp_vars[user_id]['desired_task']
+    task_name = temp_vars[user_id]['task_name']
     if message and start_time and task_name:
       update_timer(user_id, message, start_time, task_name)
 
@@ -49,7 +49,8 @@ def get_new_timer(user_id):
 def get_main_menu(users, user_id):
   active_task = users[user_id]['active_task']
   if active_task:
-    start_task_button = f'{constants.get_name("stop")}{active_task["name"]}'
+    task_name = get_task_name(users, user_id, active_task['id'])
+    start_task_button = f'{constants.get_name("stop")}{task_name}'
   else:
     start_task_button = constants.get_name('start_task')
   keyboard = [
@@ -84,35 +85,62 @@ def change_state(users, user_id, new_state):
   username = users[user_id]['username']
   log.debug(f'New state "{new_state}" for user @{username}({user_id})')
 
+def get_task_id(users, user_id, task_name):
+  for task_id in users[user_id]['tasks']:
+    if users[user_id]['tasks'][task_id]['name'] == task_name:
+      return task_id
+  return None
+
+def get_task_name(users, user_id, task_id):
+  return users[user_id]['tasks'][task_id]['name']
+
 def get_enabled_tasks(users, user_id):
   tasks = users[user_id]['tasks']
   enabled_tasks = []
-  for task in tasks:
-    if tasks[task]['enabled']:
-      enabled_tasks.append(task)
+  for task_id in tasks:
+    if tasks[task_id]['enabled']:
+      enabled_tasks.append(task_id)
+  return enabled_tasks
+
+def get_enabled_tasks_names(users, user_id):
+  tasks = users[user_id]['tasks']
+  enabled_tasks = []
+  for task_id in tasks:
+    if tasks[task_id]['enabled']:
+      enabled_tasks.append(tasks[task_id]['name'])
   return enabled_tasks
 
 def get_all_tasks(users, user_id):
   return users[user_id]['tasks'].keys()
 
+def get_all_tasks_names(users, user_id):
+  tasks = users[user_id]['tasks']
+  all_tasks = []
+  for task_id in tasks:
+    all_tasks.append(tasks[task_id]['name'])
+  return all_tasks
+
 def add_task(users, user_id, task_name, enabled=True):
-  if task_name in users[user_id]['tasks'].keys():
-    if users[user_id]['tasks'][task_name]['enabled']:
+  if task_name in get_all_tasks_names(users, user_id):
+    task_id = get_task_id(users, user_id, task_name)
+    if users[user_id]['tasks'][task_id]['enabled']:
       return None
     else:
-      users[user_id]['tasks'][task_name]['enabled'] = True
-      db.write('users',users)
+      users[user_id]['tasks'][task_id]['enabled'] = True
+      db.write('users', users)
       return f'Enabled task "{task_name}"'
   else: # adding task to db
+    new_task_id = len(get_all_tasks(users, user_id))
     users[user_id]['tasks'].update(
-        {task_name:constants.get_default_task()}
+        {new_task_id:constants.get_default_task(task_name)}
         )
-    users[user_id]['tasks'][task_name]['enabled'] = enabled
+    users[user_id]['tasks'][new_task_id]['enabled'] = enabled
     db.write('users', users)
     return f'Added task "{task_name}"'
 
-def stop_task(users, user_id, task_name, time_text):
-  temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'desired_task':None})
+def stop_task(users, user_id, task_id, time_text):
+  task_name = get_task_name(users, user_id, task_id)
+  temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None})
   task_start_time = users[user_id]['active_task']['start_time']
   # Retroactive task stopping
   if time_text == constants.get_name('now'):
@@ -123,16 +151,16 @@ def stop_task(users, user_id, task_name, time_text):
       task_end_time = max(int(time.time()) - time_interval, task_start_time+1)
     else:
       return None
-  write_task_to_diary(users, user_id, task_name, task_start_time, task_end_time)
+  write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time)
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
   task_duration = datetime.timedelta(seconds=task_duration_sec)
   users[user_id]['active_task'] = None
-  users[user_id]['tasks'][task_name]['time_total'] += task_duration_sec
+  users[user_id]['tasks'][task_id]['time_total'] += task_duration_sec
   db.write('users',users)
   return task_duration
 
-def write_task_to_diary(users, user_id, task_name, start_time, end_time):
+def write_task_to_diary(users, user_id, task_id, start_time, end_time):
   timezone = users[user_id]['timezone']
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
@@ -142,13 +170,13 @@ def write_task_to_diary(users, user_id, task_name, start_time, end_time):
   one_second = datetime.timedelta(seconds=1)
   while True:
     if start_date.date() == end_date.date():
-      update_diary_day(users, user_id, task_name, start_date.timestamp(), end_date.timestamp(), timezone)
+      update_diary_day(users, user_id, task_id, start_date.timestamp(), end_date.timestamp(), timezone)
       break
     temp_end_date = start_date.replace(hour=23, minute=59, second=59)
-    update_diary_day(users, user_id, task_name, start_date.timestamp(), temp_end_date.timestamp(), timezone)
+    update_diary_day(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), timezone)
     start_date = temp_end_date + one_second
 
-def update_diary_day(users, user_id, task_name, tz_start_time, tz_end_time, timezone):
+def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)
   filename = f'{start_date.year}-{start_date.month}-{user_id}'
   diary_path = os.path.join('data', user_id, filename)
@@ -161,18 +189,18 @@ def update_diary_day(users, user_id, task_name, tz_start_time, tz_end_time, time
     diary['days'][day_number] = constants.get_default_day(timezone)
 
   try:
-    diary['tasks_total'][task_name] += tz_time_total
+    diary['tasks_total'][task_id] += tz_time_total
   except KeyError:
-    diary['tasks_total'][task_name] = tz_time_total
+    diary['tasks_total'][task_id] = tz_time_total
   try:
-    diary['days'][day_number]['tasks_total'][task_name] += tz_time_total
+    diary['days'][day_number]['tasks_total'][task_id] += tz_time_total
   except KeyError:
-    diary['days'][day_number]['tasks_total'][task_name] = tz_time_total
+    diary['days'][day_number]['tasks_total'][task_id] = tz_time_total
 
-  diary['days'][day_number]['history'].append(
+  diary['days'][day_number]['tasks'].append(
       {
         'type':'task',
-        'name':task_name,
+        'id':task_id,
         'start_time':tz_start_time,
         'end_time':tz_end_time,
         'total_time':tz_time_total
@@ -211,15 +239,15 @@ def get_task_stats(users, user_id, option=None):
   if stats_type == 'detailed':
     tasks = get_all_tasks(users, user_id)
     report = 'Detailed statistics:\n--------------------'
-    for task in tasks:
-      task_info = users[user_id]['tasks'][task]
+    for task_id in tasks:
+      task_info = users[user_id]['tasks'][task_id]
       date_added = timezoned(users, user_id, task_info['date_added'])
       date_added = datetime.datetime.utcfromtimestamp(date_added)
       time_total = datetime.timedelta(seconds=task_info['time_total'])
       time_total_hours = task_info['time_total'] / 60 / 60
       task_status = ''
       if not task_info['enabled']: task_status = '(disabled)'
-      report += f'''\n{task}{task_status}
+      report += f'''\n{get_task_name(users, user_id, task_id)}{task_status}
       Date added: {date_added}
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
@@ -233,11 +261,11 @@ def get_task_stats(users, user_id, option=None):
   elif stats_type == 'alltime':
     tasks = get_enabled_tasks(users, user_id)
     report = 'All time statistics:\n--------------------'
-    for task in tasks:
-      task_info = users[user_id]['tasks'][task]
+    for task_id in tasks:
+      task_info = users[user_id]['tasks'][task_id]
       time_total = datetime.timedelta(seconds=task_info['time_total'])
       time_total_hours = task_info['time_total'] / 60 / 60
-      report += f'\n{task}: {time_total} ~ {time_total_hours:.1f} hours'
+      report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     keyboard = [
         [InlineKeyboardButton('Day', callback_data='task_stats:day')],
         [InlineKeyboardButton('Month', callback_data='task_stats:month')],
@@ -253,11 +281,11 @@ def get_task_stats(users, user_id, option=None):
     report = f'Month statistics: {date.year}-{date.month}\n--------------------'
     diary = db.read(os.path.join('data', user_id, filename))
     if diary:
-      for task_name in diary['tasks_total']:
-        task_time = diary['tasks_total'][task_name]
+      for task_id in diary['tasks_total']:
+        task_time = diary['tasks_total'][task_id]
         time_total = datetime.timedelta(seconds=task_time)
         time_total_hours = task_time / 60 / 60
-        report += f'\n{task_name}: {time_total} ~ {time_total_hours:.1f} hours'
+        report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     else:
       report += f'\nNo data for {date.year}-{date.month}'
     keyboard = [
@@ -279,11 +307,11 @@ def get_task_stats(users, user_id, option=None):
     diary = db.read(os.path.join('data', user_id, filename))
     day = str(date.day)
     if diary and day in diary['days'].keys():
-      for task_name in diary['days'][day]['tasks_total']:
-        task_time = diary['days'][day]['tasks_total'][task_name]
+      for task_id in diary['days'][day]['tasks_total']:
+        task_time = diary['days'][day]['tasks_total'][task_id]
         time_total = datetime.timedelta(seconds=task_time)
         time_total_hours = task_time / 60 / 60
-        report += f'\n{task_name}: {time_total} ~ {time_total_hours:.1f} hours'
+        report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     else:
       report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     keyboard = [
@@ -333,12 +361,13 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'main_menu')
         return
 
-    task_name = temp_vars[user_id]['desired_task']
-    if task_name not in users[user_id]['tasks'].keys():
+    task_name = temp_vars[user_id]['task_name']
+    task_id = get_task_id(users, user_id, task_name)
+    if task_name not in get_all_tasks_names(users, user_id):
       add_task(users, user_id, task_name, enabled=False)
       tgbot.send_message(user_id, f'Added custom task {task_name}')
     users[user_id]['active_task'] = {
-        'name': task_name,
+        'id': task_id,
         'start_time':start_time
         }
     db.write('users',users)
@@ -351,7 +380,7 @@ def menu_handler(user_id, text):
   # STATE - start_task_time
   if state == 'start_task_time':
     task_name = text
-    temp_vars[user_id].update({'desired_task':task_name})
+    temp_vars[user_id].update({'task_name':task_name})
     keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
     tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
     change_state(users, user_id, 'start_task')
@@ -359,8 +388,9 @@ def menu_handler(user_id, text):
   if state == 'stop_task':
     time_interval = text
     if users[user_id]['active_task']:
-      task_name = users[user_id]['active_task']['name']
-      task_duration = stop_task(users, user_id, task_name, time_interval)
+      task_id = users[user_id]['active_task']['id']
+      task_name = get_task_name(users, user_id, task_id)
+      task_duration = stop_task(users, user_id, task_id, time_interval)
       if task_duration != None:
         tgbot.send_message(user_id, f'Stopped {task_name}\nTime taken: {task_duration}', keyboard=get_main_menu(users, user_id))
         change_state(users, user_id, 'main_menu')
@@ -383,14 +413,13 @@ def menu_handler(user_id, text):
   # STATE - remove_task
   elif state == 'remove_task':
     task_name = text
-    if users[user_id]['active_task'] == task_name:
-      users[user_id]['active_task'] = None
-    if task_name in users[user_id]['tasks'].keys():
-      users[user_id]['tasks'][task_name]['enabled'] = False
+    task_id = get_task_id(users, user_id, task_name)
+    if task_id != None:
+      users[user_id]['tasks'][task_id]['enabled'] = False
       db.write('users',users)
-      tgbot.send_message(user_id, f'Removed task "{task_name}"', keyboard=get_main_menu(users, user_id))
+      tgbot.send_message(user_id, f'Disabled task "{task_name}"', keyboard=get_main_menu(users, user_id))
     else:
-      tgbot.send_message(user_id, f'Task "{task_name}" doesn\'t exist\n/cancel', keyboard=get_main_menu(users, user_id))
+      tgbot.send_message(user_id, f'Task "{task_name}" does not exist', keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
 
   # STATE - set_timezone
@@ -423,7 +452,7 @@ def menu_handler(user_id, text):
       change_state(users, user_id, 'set_timezone')
 
     elif button_name == constants.get_name('start_task'):
-      tasks = get_enabled_tasks(users, user_id)
+      tasks = get_enabled_tasks_names(users, user_id)
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
@@ -436,7 +465,7 @@ def menu_handler(user_id, text):
       change_state(users, user_id, 'add_task')
 
     elif button_name == constants.get_name('remove_task'):
-      tasks = get_enabled_tasks(users, user_id)
+      tasks = get_enabled_tasks_names(users, user_id)
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to remove\n/cancel', keyboard=keyboard)
@@ -454,7 +483,8 @@ def menu_handler(user_id, text):
       stop_string_len = len(stop_string)
       # removing active task
       if button_name[:stop_string_len] == stop_string: # stop_task
-        task_name = users[user_id]['active_task']['name']
+        task_id = users[user_id]['active_task']['id']
+        task_name = get_task_name(users, user_id, task_id)
         keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
         tgbot.send_message(user_id, f'When to stop {task_name}?\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
