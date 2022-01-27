@@ -94,6 +94,8 @@ def command_timer(update, context):
   log_message(update)
   user_id = str(update.message.chat['id'])
   if validated(update):
+    if user_id not in logic.temp_vars:
+      logic.temp_vars.update({user_id:constants.get_temp_vars()})
     logic.get_new_timer(user_id)
 
 def callback_handler(update, context):
