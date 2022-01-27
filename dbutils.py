@@ -15,7 +15,7 @@ with suppress(FileExistsError):
 log = logging.getLogger('main')
 log.setLevel(logging.DEBUG)
 
-filename = 'chkdb-' + datetime.datetime.now().strftime('%Y-%m-%d') + '.log'
+filename = 'dbutils-' + datetime.datetime.now().strftime('%Y-%m-%d') + '.log'
 file = logging.FileHandler(os.path.join('logs', filename))
 file.setLevel(logging.DEBUG)
 fileformat = logging.Formatter('%(asctime)s:%(levelname)s: %(message)s')
@@ -32,7 +32,7 @@ log.addHandler(stream)
 
 def check_params():
   missing_total = 0
-  log.info('Checking params.json')
+  log.info('Checking params.json...')
   params_default = db.read('params.defaults')
   params = db.read('params')
   for param in params_default:
@@ -47,10 +47,10 @@ def check_params():
 
 def check_users():
   missing_total = 0
-  log.info('Checking users.json')
+  log.info('Checking users.json...')
   users = db.read('users')
   default_user = constants.get_default_user('::corrupted::')
-  default_task = constants.get_default_task()
+  default_task = constants.get_default_task('::corrupted::')
   for user in users:
     log.info(f'Checking user {user}')
     for key in default_user:
@@ -72,11 +72,11 @@ def check_users():
   return missing_total
 
 def check_data():
-  log.info('Checking data')
+  log.info('Checking data...')
   missing_total = 0
   default_diary = constants.get_defaul_diary()
   default_day= constants.get_default_day(0)
-  data_dir = os.path.join('db/data')
+  data_dir = os.path.join('db', 'data')
   for path, subdirs, files in os.walk(data_dir):
     for name in files:
       missing_local = 0
@@ -104,21 +104,106 @@ def check_data():
   log.info(f'Data check complete, {missing_total} missing entries created')
   return missing_total
 
+def update_task_ids(force, dry_run):
+  log.info('Updating task IDs...')
+  updated_tasks = 0
+  updated_data = 0
+  users = db.read('users')
+  for user_id in users:
+    #Updating tasks
+    log.info(f'Updating tasks for user {user_id}')
+    task_id_dict = {}
+    task_id = 0
+    for task_name in users[user_id]['tasks'].copy():
+      if task_name.isdigit() and not force:
+        log.warning(f'Key for task {task_name} is an integer and --force is not specified, aborting')
+        return
+      users[user_id]['tasks'][task_id] = users[user_id]['tasks'][task_name]
+      users[user_id]['tasks'][task_id]['name'] = task_name
+      users[user_id]['tasks'].pop(task_name)
+      task_id_dict[task_name] = task_id
+      log.info(f'Key for task "{task_name}" changed to {task_id}')
+      updated_tasks += 1
+      task_id += 1
+    #Updating data
+    log.info('Updating data for user {user_id}')
+    data_dir = os.path.join('db', 'data', user_id)
+    for path, subdirs, files in os.walk(data_dir):
+      for name in files:
+        missing_local = 0
+        db_name = os.path.join(path, name)[3:-5] # remove "db/" from name
+        log.info(f'Updating {db_name}')
+        diary = db.read(db_name)
+        log.info('Updating tasks_total')
+        for task_name in diary['tasks_total'].copy():
+          if task_name.isdigit() and not force:
+            log.warning(f'Key for task {task_name} is an integer and --force is not specified, aborting')
+            return
+          task_id = task_id_dict[task_name]
+          diary['tasks_total'][task_id] = diary['tasks_total'][task_name]
+          diary['tasks_total'].pop(task_name)
+          log.info(f'Changed "{task_name}" to "{task_id}"')
+          updated_data += 1
+        for day in diary['days']:
+          log.info(f'Updating day {day}')
+          log.info(f'Updating tasks_total')
+          for task_name in diary['days'][day]['tasks_total'].copy():
+            if task_name.isdigit() and not force:
+              log.warning(f'Key for task {task_name} is an integer and --force is not specified, aborting')
+              return
+            task_id = task_id_dict[task_name]
+            diary['days'][day]['tasks_total'][task_id] = diary['days'][day]['tasks_total'][task_name]
+            diary['days'][day]['tasks_total'].pop(task_name)
+            log.info(f'Changed "{task_name}" to "{task_id}"')
+            updated_data += 1
+          # Updating history
+          log.info('Updating history')
+          task_list = []
+          updated_entries = 0
+          for entry in diary['days'][day]['history'].copy():
+            entry['id'] = task_id_dict[entry['name']]
+            entry.pop('name')
+            task_list.append(entry)
+            updated_data += 1
+            updated_entries += 1
+          diary['days'][day]['tasks'] = task_list
+          diary['days'][day].pop('history')
+          log.info(f'{updated_entries} entries moved from "history" to "tasks"')
+        if dry_run:
+          log.info(f'--dry-run, not writing changes to "{db_name}"')
+        else:
+          db.write(db_name, diary)
+  if dry_run:
+    log.info('--dry-run, not writing changes to "users"')
+  else:
+    db.write('users', users)
+  log.info(f'Complete, {updated_tasks} tasks updated, {updated_data} entries updated')
+
 @easyargs
 class DButils(object):
   """Database utility"""
+
+  def task_id_update(self, force=False, dry_run=False):
+    '''
+    Tasks ID update (v0.7.0)
+    :param force: Force update even if id is already integer
+    :param dry_run: Do not write changes
+    '''
+    db.archive('task_id_update')
+    update_task_ids(force, dry_run)
 
   def backup(self, name='backup', max_backups=0):
     '''
     Backup database
     :param name: Archive name
-    :param max_backups: Max number of backups (if exceedes, removes oldest backups) 0 for infinite
+    :param max_backups: Max number of backups (if exceedes, removes oldest backups), 0 for infinite
     '''
-    db.archive(filename=name)
+    db.archive(filename=name, max_backups=max_backups)
 
-  def chkdb(self):
+  def chkdb(self, backup=True):
     """
     Check database for missing keys and add them
+    :param backup: Backup database before checking
     """
     missing_total = 0
     date = datetime.datetime.now()
@@ -130,4 +215,6 @@ class DButils(object):
     log.info(f'Database check complete, total of {missing_total} missing entries created')
 
 if __name__ == '__main__':
+  log.info('================================')
+  log.info('nDButils started')
   DButils()
