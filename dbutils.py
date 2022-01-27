@@ -5,6 +5,7 @@ import datetime
 from contextlib import suppress
 import constants
 import db
+import easyargs
 
 # Logger setup
 with suppress(FileExistsError):
@@ -103,12 +104,30 @@ def check_data():
   log.info(f'Data check complete, {missing_total} missing entries created')
   return missing_total
 
+@easyargs
+class DButils(object):
+  """Database utility"""
+
+  def backup(self, name='backup', max_backups=0):
+    '''
+    Backup database
+    :param name: Archive name
+    :param max_backups: Max number of backups (if exceedes, removes oldest backups) 0 for infinite
+    '''
+    db.archive(filename=name)
+
+  def chkdb(self):
+    """
+    Check database for missing keys and add them
+    """
+    missing_total = 0
+    date = datetime.datetime.now()
+    log.info(f'Database check started on {date}')
+    db.archive(filename='update')
+    missing_total += check_params()
+    missing_total += check_users()
+    missing_total += check_data()
+    log.info(f'Database check complete, total of {missing_total} missing entries created')
+
 if __name__ == '__main__':
-  missing_total = 0
-  date = datetime.datetime.now()
-  log.info(f'Database check started on {date}')
-  db.archive(filename='update')
-  missing_total += check_params()
-  missing_total += check_users()
-  missing_total += check_data()
-  log.info(f'Database check complete, total of {missing_total} missing entries created')
+  DButils()
