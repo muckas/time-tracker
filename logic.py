@@ -160,6 +160,10 @@ def get_task_stats(users, user_id, option=None):
     stats_type = 'alltime'
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
+  elif option == 'detailed':
+    stats_type = 'detailed'
+    users[user_id]['stats_type'] = stats_type
+    db.write('users', users)
   elif option == 'month':
     stats_type = 'month'
     users[user_id]['stats_type'] = stats_type
@@ -175,7 +179,7 @@ def get_task_stats(users, user_id, option=None):
     stats_delta -= 1
     temp_vars[user_id]['stats_delta'] = stats_delta
 
-  if stats_type == 'alltime':
+  if stats_type == 'detailed':
     tasks = get_enabled_tasks(users, user_id)
     report = 'All time statistics:\n--------------------'
     for task in tasks:
@@ -190,6 +194,23 @@ def get_task_stats(users, user_id, option=None):
     keyboard = [
         [InlineKeyboardButton('Day', callback_data='task_stats:day')],
         [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return report, reply_markup
+
+  elif stats_type == 'alltime':
+    tasks = get_enabled_tasks(users, user_id)
+    report = 'Detailed statistics:\n--------------------'
+    for task in tasks:
+      task_info = users[user_id]['tasks'][task]
+      time_total = datetime.timedelta(seconds=task_info['time_total'])
+      time_total_hours = task_info['time_total'] / 60 / 60
+      report += f'\n{task}: {time_total} ~ {time_total_hours:.1f} hours'
+    keyboard = [
+        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
+        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
@@ -210,7 +231,8 @@ def get_task_stats(users, user_id, option=None):
       report += f'\nNo data for {date.year}-{date.month}'
     keyboard = [
         [InlineKeyboardButton('Day', callback_data='task_stats:day')],
-        [InlineKeyboardButton('Alltime', callback_data='task_stats:alltime')],
+        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
+        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
@@ -235,7 +257,8 @@ def get_task_stats(users, user_id, option=None):
       report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     keyboard = [
         [InlineKeyboardButton('Month', callback_data='task_stats:month')],
-        [InlineKeyboardButton('Alltime', callback_data='task_stats:alltime')],
+        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
+        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
