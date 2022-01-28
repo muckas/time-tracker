@@ -7,6 +7,8 @@ import db
 import tgbot
 import constants
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+import icalendar
+import uuid
 
 log = logging.getLogger('main')
 
@@ -148,7 +150,12 @@ def stop_task(users, user_id, task_id, time_text):
   else:
     time_interval = convert_interval_to_seconds(time_text)
     if time_interval:
-      task_end_time = max(int(time.time()) - time_interval, task_start_time+1)
+      if int(time.time()) - time_interval <= task_start_time:
+        users[user_id]['active_task'] = None
+        db.write('users',users)
+        return 'None'
+      else:
+        task_end_time = int(time.time()) - time_interval
     else:
       return None
   write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time)
@@ -161,8 +168,9 @@ def stop_task(users, user_id, task_id, time_text):
   return task_duration
 
 def write_task_to_diary(users, user_id, task_id, start_time, end_time):
-  write_to_task_list(user_id, task_id, start_time, end_time)
   timezone = users[user_id]['timezone']
+  write_to_task_list(user_id, task_id, timezone, start_time, end_time)
+  write_to_ical(users, user_id, task_id, start_time, end_time)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -177,13 +185,36 @@ def write_task_to_diary(users, user_id, task_id, start_time, end_time):
     update_diary_day(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), timezone)
     start_date = temp_end_date + one_second
 
-def write_to_task_list(user_id, task_id, start_time, end_time):
+def write_to_task_list(user_id, task_id, timezone, start_time, end_time):
   task_list_filename = f'tasks-{user_id}'
   task_list_path = os.path.join('data', user_id, task_list_filename)
   task_list = db.read(task_list_path)
   if not task_list: task_list = []
-  task_list.append(constants.get_default_list_task(task_id, start_time, end_time))
+  task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
   db.write(task_list_path, task_list)
+
+def write_to_ical(users, user_id, task_id, start_time, end_time):
+  calendar_name = f'tasks-calendar-{user_id}.ics'
+  calendar_path = os.path.join('db', 'data', user_id, calendar_name)
+  timezone = users[user_id]['timezone']
+  if os.path.isfile(calendar_path):
+    cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
+  else:
+    cal = constants.get_new_calendar('Time-Tracker-Tasks', timezone)
+  summary = users[user_id]['tasks'][task_id]['name']
+  tzoffset_hours = timezone
+  tzoffset_sec = tzoffset_hours * 60 * 60
+  dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
+  dtend = datetime.datetime.utcfromtimestamp(end_time + tzoffset_sec)
+  event = icalendar.Event()
+  event.add('UID', uuid.uuid4())
+  event.add('summary', summary)
+  event.add('tzoffset', tzoffset_hours)
+  event.add('dtstart', dtstart)
+  event.add('dtend', dtend)
+  cal.add_component(event)
+  with open(calendar_path, 'wb') as f:
+    f.write(cal.to_ical())
 
 def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)

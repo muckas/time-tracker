@@ -1,4 +1,5 @@
 import time
+import icalendar
 
 def get_temp_vars():
   return {
@@ -40,12 +41,19 @@ def get_default_day(timezone):
       'tasks':[],
       }
 
-def get_default_list_task(task_id, start_time, end_time):
+def get_default_list_task(task_id, timezone, start_time, end_time):
   return {
       'id': task_id,
+      'timezone': timezone,
       'start': start_time,
       'end': end_time,
       }
+
+def get_new_calendar(name, timezone):
+  cal = icalendar.Calendar()
+  cal.add('X-WR-CALNAME', 'Time-Tracker-Tasks')
+  cal.add('TZOFFSET', timezone)
+  return cal
 
 def get_name(name):
   names = {
