@@ -40,6 +40,13 @@ def get_default_day(timezone):
       'tasks':[],
       }
 
+def get_default_list_task(task_id, start_time, end_time):
+  return {
+      'id': task_id,
+      'start': start_time,
+      'end': end_time,
+      }
+
 def get_name(name):
   names = {
     'disable_menu':'Hide menu',

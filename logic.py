@@ -161,6 +161,7 @@ def stop_task(users, user_id, task_id, time_text):
   return task_duration
 
 def write_task_to_diary(users, user_id, task_id, start_time, end_time):
+  write_to_task_list(user_id, task_id, start_time, end_time)
   timezone = users[user_id]['timezone']
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
@@ -175,6 +176,14 @@ def write_task_to_diary(users, user_id, task_id, start_time, end_time):
     temp_end_date = start_date.replace(hour=23, minute=59, second=59)
     update_diary_day(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), timezone)
     start_date = temp_end_date + one_second
+
+def write_to_task_list(user_id, task_id, start_time, end_time):
+  task_list_filename = f'tasks-{user_id}'
+  task_list_path = os.path.join('data', user_id, task_list_filename)
+  task_list = db.read(task_list_path)
+  if not task_list: task_list = []
+  task_list.append(constants.get_default_list_task(task_id, start_time, end_time))
+  db.write(task_list_path, task_list)
 
 def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)
