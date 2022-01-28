@@ -197,35 +197,38 @@ def generate_task_lists(force, dry_run):
     user_total = 0
     log.info(f'User {user_id}')
     folder = os.path.join('db', 'data', user_id)
-    files = os.listdir(folder)
-    files = [os.path.join(folder, f) for f in files] # add path to each file
-    files.sort(key=lambda x: os.path.getmtime(x))
-    for file in files:
-      if 'tasks' in file:
-        pass
+    try:
+      files = os.listdir(folder)
+      files = [os.path.join(folder, f) for f in files] # add path to each file
+      files.sort(key=lambda x: os.path.getmtime(x))
+      for file in files:
+        if 'tasks' in file:
+          pass
+        else:
+          db_name = file[3:-5] # remove "db/" and ".json" from name
+          log.info(f'Data {db_name}')
+          data_total = 0
+          diary = db.read(db_name)
+          for day in diary['days']:
+            log.info(f'Day {day}')
+            timezone = int(diary['days'][day]['timezone'])
+            tzoffset_sec = timezone * 60 * 60
+            for task in diary['days'][day]['tasks']:
+              task_id = task['id']
+              start_time = int(task['start_time'] - tzoffset_sec)
+              end_time = int(task['end_time'] - tzoffset_sec)
+              task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
+              data_total += 1
+              user_total += 1
+              entries_total += 1
+          log.info(f'{data_total} entries for {db_name}')
+      log.info(f'{user_total} entries for user {user_id}')
+      if dry_run:
+        log.info(f'--dry-run, not writing {task_list_path}')
       else:
-        db_name = file[3:-5] # remove "db/" and ".json" from name
-        log.info(f'Data {db_name}')
-        data_total = 0
-        diary = db.read(db_name)
-        for day in diary['days']:
-          log.info(f'Day {day}')
-          timezone = int(diary['days'][day]['timezone'])
-          tzoffset_sec = timezone * 60 * 60
-          for task in diary['days'][day]['tasks']:
-            task_id = task['id']
-            start_time = int(task['start_time'] - tzoffset_sec)
-            end_time = int(task['end_time'] - tzoffset_sec)
-            task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
-            data_total += 1
-            user_total += 1
-            entries_total += 1
-        log.info(f'{data_total} entries for {db_name}')
-    log.info(f'{user_total} entries for user {user_id}')
-    if dry_run:
-      log.info(f'--dry-run, not writing {task_list_path}')
-    else:
-      db.write(task_list_path, task_list)
+        db.write(task_list_path, task_list)
+    except FileNotFoundError:
+      log.warning(f'Path {folder} does not exist, skipping')
   log.info(f'{entries_total} total entries created')
 
 def generate_calendars(force, dry_run):
@@ -243,29 +246,30 @@ def generate_calendars(force, dry_run):
     timezone = users[user_id]['timezone']
     cal = constants.get_new_calendar('Time-Tracker-Tasks', timezone)
     task_list = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
-    for task in task_list:
-      task_id = str(task['id'])
-      summary = users[user_id]['tasks'][task_id]['name']
-      tzoffset_hours = task['timezone']
-      tzoffset_sec = tzoffset_hours * 60 * 60
-      dtstart = datetime.datetime.utcfromtimestamp(task['start'] + tzoffset_sec)
-      dtend = datetime.datetime.utcfromtimestamp(task['end'] + tzoffset_sec)
-      event = icalendar.Event()
-      event.add('UID', uuid.uuid4())
-      event.add('summary', summary)
-      event.add('tzoffset', tzoffset_hours)
-      event.add('dtstart', dtstart)
-      event.add('dtend', dtend)
-      cal.add_component(event)
-      events_total += 1
-      entries_total += 1
-    log.info(f'Generated {events_total} events for {calendar_path}')
-    if dry_run:
-      log.info(f'--dry-run, not writing {calendar_path}')
-    else:
-      with open(calendar_path, 'wb') as f:
-        f.write(cal.to_ical())
-      log.info(f'Created {calendar_path}')
+    if task_list:
+      for task in task_list:
+        task_id = str(task['id'])
+        summary = users[user_id]['tasks'][task_id]['name']
+        tzoffset_hours = task['timezone']
+        tzoffset_sec = tzoffset_hours * 60 * 60
+        dtstart = datetime.datetime.utcfromtimestamp(task['start'] + tzoffset_sec)
+        dtend = datetime.datetime.utcfromtimestamp(task['end'] + tzoffset_sec)
+        event = icalendar.Event()
+        event.add('UID', uuid.uuid4())
+        event.add('summary', summary)
+        event.add('tzoffset', tzoffset_hours)
+        event.add('dtstart', dtstart)
+        event.add('dtend', dtend)
+        cal.add_component(event)
+        events_total += 1
+        entries_total += 1
+      log.info(f'Generated {events_total} events for {calendar_path}')
+      if dry_run:
+        log.info(f'--dry-run, not writing {calendar_path}')
+      else:
+        with open(calendar_path, 'wb') as f:
+          f.write(cal.to_ical())
+        log.info(f'Created {calendar_path}')
   log.info(f'Created total of {entries_total} entries for {len(users)} calendars')
 
 @easyargs
