@@ -22,6 +22,14 @@ def timezoned(users, user_id, timestamp):
   delta = 60 * 60 * users[user_id]['timezone']
   return timestamp + delta
 
+def send_calendar(user_id):
+  date = datetime.datetime.now().date()
+  file_path = os.path.join('db', 'data', user_id, f'tasks-calendar-{user_id}.ics')
+  file_name = f'tasks-calendar-{date}.ics'
+  success = tgbot.send_document(user_id, file_path, file_name)
+  if not success:
+    tgbot.send_message(user_id, 'Couldn\'t find your calendar :-(')
+
 def update_timer(user_id, message, start_time, task_name):
   timer = int(time.time()) - start_time
   timer = datetime.timedelta(seconds=timer)
