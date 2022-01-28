@@ -80,28 +80,31 @@ def check_data():
   for path, subdirs, files in os.walk(data_dir):
     for name in files:
       missing_local = 0
-      db_name = os.path.join(path, name)[3:-5] # remove "db/" from name
-      log.info(f'Checking {db_name}')
-      diary = db.read(db_name)
-      for key in default_diary:
-        if key not in diary.keys():
-          missing_local += 1
-          value = default_diary[key]
-          diary[key] = value
-          log.info(f'Missing key "{key}", adding {key}:{value}')
-      for day in diary['days']:
-        log.info(f'Checking day {day}')
-        for key in default_day:
-          if key not in diary['days'][day].keys():
-            missing_total += 1
-            value = default_day[key]
-            diary['days'][day][key] = value
+      if name[:5] == 'tasks': # Skip tasks-{user_id}.json
+        pass
+      else:
+        db_name = os.path.join(path, name)[3:-5] # remove "db/" and ".json" from name
+        log.info(f'Checking {db_name}')
+        diary = db.read(db_name)
+        for key in default_diary:
+          if key not in diary.keys():
+            missing_local += 1
+            value = default_diary[key]
+            diary[key] = value
             log.info(f'Missing key "{key}", adding {key}:{value}')
-        #diary['days'][day]['history'] check goes here
-      if missing_local > 0: db.write(db_name, diary)
-      missing_total += missing_local
-      missing_local = 0
-  log.info(f'Data check complete, {missing_total} missing entries created')
+        for day in diary['days']:
+          log.info(f'Checking day {day}')
+          for key in default_day:
+            if key not in diary['days'][day].keys():
+              missing_total += 1
+              value = default_day[key]
+              diary['days'][day][key] = value
+              log.info(f'Missing key "{key}", adding {key}:{value}')
+          #diary['days'][day]['history'] check goes here ============================
+        if missing_local > 0: db.write(db_name, diary)
+        missing_total += missing_local
+        missing_local = 0
+    log.info(f'Data check complete, {missing_total} missing entries created')
   return missing_total
 
 def update_task_ids(force, dry_run):
@@ -131,7 +134,7 @@ def update_task_ids(force, dry_run):
     for path, subdirs, files in os.walk(data_dir):
       for name in files:
         missing_local = 0
-        db_name = os.path.join(path, name)[3:-5] # remove "db/" from name
+        db_name = os.path.join(path, name)[3:-5] # remove "db/" and ".json" from name
         log.info(f'Updating {db_name}')
         diary = db.read(db_name)
         log.info('Updating tasks_total')
@@ -179,9 +182,60 @@ def update_task_ids(force, dry_run):
     db.write('users', users)
   log.info(f'Complete, {updated_tasks} tasks updated, {updated_data} entries updated')
 
+def generate_task_lists(force, dry_run):
+  log.info('Started task list generaion')
+  users = db.read('users')
+  task_list = []
+  entries_total = 0
+  for user_id in users:
+    task_list_path = os.path.join('data', user_id, f'tasks-{user_id}')
+    if db.read(task_list_path) and not force:
+      log.warning(f'{task_list_path} already exists and --force is not specified, aborting')
+      return
+    user_total = 0
+    log.info(f'User {user_id}')
+    folder = os.path.join('db', 'data', user_id)
+    files = os.listdir(folder)
+    files = [os.path.join(folder, f) for f in files] # add path to each file
+    files.sort(key=lambda x: os.path.getmtime(x))
+    for file in files:
+      if 'tasks' in file:
+        pass
+      else:
+        db_name = file[3:-5] # remove "db/" and ".json" from name
+        log.info(f'Data {db_name}')
+        data_total = 0
+        diary = db.read(db_name)
+        for day in diary['days']:
+          log.info(f'Day {day}')
+          for task in diary['days'][day]['tasks']:
+            task_id = task['id']
+            start_time = task['start_time']
+            end_time = task['end_time']
+            task_list.append(constants.get_default_list_task(task_id, start_time, end_time))
+            data_total += 1
+            user_total += 1
+            entries_total += 1
+        log.info(f'{data_total} entries for {db_name}')
+    log.info(f'{user_total} entries for user {user_id}')
+    if dry_run:
+      log.info(f'--dry-run, not writing changes to {task_list_path}')
+    else:
+      db.write(task_list_path, task_list)
+  log.info(f'{entries_total} total entries created')
+
 @easyargs
 class DButils(object):
   """Database utility"""
+
+  def generate_task_lists(self, force=False, dry_run=False):
+    '''
+    Generate task list files
+    :param force: Force generate if task list already exists
+    :param dry_run: Do not write changes
+    '''
+    db.archive('generate_task_lists')
+    generate_task_lists(force, dry_run)
 
   def task_id_update(self, force=False, dry_run=False):
     '''
@@ -216,5 +270,5 @@ class DButils(object):
 
 if __name__ == '__main__':
   log.info('================================')
-  log.info('nDButils started')
+  log.info('DButils started')
   DButils()
