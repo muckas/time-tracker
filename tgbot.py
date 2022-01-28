@@ -28,6 +28,15 @@ def send_message(user_id, text, silent=True, keyboard=None, reply_markup=None):
   log.info(f'Message to @{username}({user_id}):{text}')
   return message
 
+def send_document(user_id, file_path, file_name, caption=None, silent=True):
+  try:
+    tg.send_chat_action(chat_id=user_id, action=telegram.ChatAction.UPLOAD_DOCUMENT)
+    with open(file_path, 'rb') as file:
+      tg.send_document(chat_id=user_id, document=file, filename=file_name, caption=caption, disable_notification=silent)
+      return True
+  except FileNotFoundError:
+    return False
+
 def log_message(update):
   user_id = str(update.message.chat['id'])
   username = str(update.message.chat['username'])
@@ -101,6 +110,11 @@ def command_timer(update, context):
     logic.check_temp_vars(user_id)
     logic.get_new_timer(user_id)
 
+def command_calendar(update, context):
+  log_message(update)
+  user_id = str(update.message.chat['id'])
+  logic.send_calendar(user_id)
+
 def callback_handler(update, context):
   users = db.read('users')
   query = update.callback_query
@@ -126,6 +140,7 @@ def start(tg_token):
   dispatcher.add_handler(CommandHandler('menu', command_menu))
   dispatcher.add_handler(CommandHandler('cancel', command_menu))
   dispatcher.add_handler(CommandHandler('timer', command_timer))
+  dispatcher.add_handler(CommandHandler('calendar', command_calendar))
   dispatcher.add_handler(CallbackQueryHandler(callback_handler))
   dispatcher.add_error_handler(error_handler)
   updater.start_polling()

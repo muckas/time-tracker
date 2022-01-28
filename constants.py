@@ -1,9 +1,10 @@
 import time
+import icalendar
 
 def get_temp_vars():
   return {
       'state':'main_menu',
-      'desired_task':None,
+      'task_name':None,
       'timer_message':None,
       'timer_start':None,
       'stats_delta':0,
@@ -19,8 +20,9 @@ def get_default_user(tg_username):
       'stats_type':'alltime',
       }
 
-def get_default_task():
+def get_default_task(name):
   return {
+      'name': name,
       'enabled': True,
       'date_added': int(time.time()),
       'time_total': 0,
@@ -36,15 +38,29 @@ def get_default_day(timezone):
   return {
       'timezone':timezone,
       'tasks_total':{},
-      'history':[],
+      'tasks':[],
       }
+
+def get_default_list_task(task_id, timezone, start_time, end_time):
+  return {
+      'id': task_id,
+      'timezone': timezone,
+      'start': start_time,
+      'end': end_time,
+      }
+
+def get_new_calendar(name, timezone):
+  cal = icalendar.Calendar()
+  cal.add('X-WR-CALNAME', 'Time-Tracker-Tasks')
+  cal.add('TZOFFSET', timezone)
+  return cal
 
 def get_name(name):
   names = {
     'disable_menu':'Hide menu',
     'start_task':'Start task',
     'add_task':'Add task',
-    'remove_task':'Remove task',
+    'remove_task':'Disable task',
     'stop':'Stop ',
     'task_stats':'Show task stats',
     'set_timezone':'Set timezone',
