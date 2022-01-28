@@ -211,10 +211,11 @@ def generate_task_lists(force, dry_run):
         for day in diary['days']:
           log.info(f'Day {day}')
           timezone = int(diary['days'][day]['timezone'])
+          tzoffset_sec = timezone * 60 * 60
           for task in diary['days'][day]['tasks']:
             task_id = task['id']
-            start_time = int(task['start_time'])
-            end_time = int(task['end_time'])
+            start_time = int(task['start_time'] - tzoffset_sec)
+            end_time = int(task['end_time'] - tzoffset_sec)
             task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
             data_total += 1
             user_total += 1
