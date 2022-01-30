@@ -49,7 +49,7 @@ def get_new_timer(user_id):
   users = db.read('users')
   if users[user_id]['active_task']:
     message = tgbot.send_message(user_id, 'Timer')
-    task_name = users[user_id]['active_task']['name']
+    task_name = get_task_name(users, user_id, users[user_id]['active_task']['id'])
     start_time = users[user_id]['active_task']['start_time']
     temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time, 'desired_task':task_name})
     update_timer(user_id, message, start_time, task_name)
