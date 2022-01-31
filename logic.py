@@ -206,22 +206,34 @@ def write_to_ical(users, user_id, task_id, start_time, end_time):
   calendar_path = os.path.join('db', 'data', user_id, calendar_name)
   timezone = users[user_id]['timezone']
   if os.path.isfile(calendar_path):
+    log.debug(f'Reading from {calendar_path}')
     cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
   else:
-    cal = constants.get_new_calendar('Time-Tracker-Tasks', timezone)
-  summary = users[user_id]['tasks'][task_id]['name']
+    log.debug(f'Making new calendar')
+    cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+  task_duration = end_time - start_time
+  if task_duration < 60 * 60:
+    task_duration /= 60
+    task_duration = f' {int(task_duration)}m'
+  else:
+    task_duration /= 60 * 60
+    task_duration = f' {task_duration:.1f}h'
+  summary = users[user_id]['tasks'][task_id]['name'] + task_duration
   tzoffset_hours = timezone
   tzoffset_sec = tzoffset_hours * 60 * 60
   dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
   dtend = datetime.datetime.utcfromtimestamp(end_time + tzoffset_sec)
   event = icalendar.Event()
-  event.add('UID', uuid.uuid4())
+  event_id = uuid.uuid4()
+  event.add('UID', event_id)
   event.add('summary', summary)
   event.add('tzoffset', tzoffset_hours)
   event.add('dtstart', dtstart)
   event.add('dtend', dtend)
   cal.add_component(event)
+  log.debug(f'Added event {event_id} to calendar')
   with open(calendar_path, 'wb') as f:
+    log.debug(f'Writing to {calendar_path}')
     f.write(cal.to_ical())
 
 def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):

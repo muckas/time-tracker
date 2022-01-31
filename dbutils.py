@@ -8,6 +8,7 @@ import db
 import easyargs
 import icalendar
 import uuid
+import logic
 
 # Logger setup
 with suppress(FileExistsError):
@@ -240,7 +241,7 @@ def generate_task_lists(force, dry_run):
       log.warning(f'Path {folder} does not exist, skipping')
   log.info(f'{entries_total} total entries created')
 
-def generate_calendars(force, dry_run):
+def generate_calendars(force):
   log.info('Started calendar generation')
   users = db.read('users')
   entries_total = 0
@@ -251,48 +252,36 @@ def generate_calendars(force, dry_run):
       log.warning(f'{calendar_path} already exists and --force is not specified, aborting')
       return
     log.info(f'Generating {calendar_name} for user {user_id}')
-    events_total = 0
     timezone = users[user_id]['timezone']
-    cal = constants.get_new_calendar('Time-Tracker-Tasks', timezone)
+    cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+    with open(calendar_path, 'wb') as f:
+      log.debug(f'Writing to {calendar_path}')
+      f.write(cal.to_ical())
+    events_total = 0
     task_list = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
     if task_list:
       for task in task_list:
         task_id = str(task['id'])
-        summary = users[user_id]['tasks'][task_id]['name']
-        tzoffset_hours = task['timezone']
-        tzoffset_sec = tzoffset_hours * 60 * 60
-        dtstart = datetime.datetime.utcfromtimestamp(task['start'] + tzoffset_sec)
-        dtend = datetime.datetime.utcfromtimestamp(task['end'] + tzoffset_sec)
-        event = icalendar.Event()
-        event.add('UID', uuid.uuid4())
-        event.add('summary', summary)
-        event.add('tzoffset', tzoffset_hours)
-        event.add('dtstart', dtstart)
-        event.add('dtend', dtend)
-        cal.add_component(event)
+        log.info(f'Task {task_id}')
+        start_time = task['start']
+        end_time = task['end']
+        logic.write_to_ical(users, user_id, task_id, start_time, end_time)
         events_total += 1
         entries_total += 1
       log.info(f'Generated {events_total} events for {calendar_path}')
-      if dry_run:
-        log.info(f'--dry-run, not writing {calendar_path}')
-      else:
-        with open(calendar_path, 'wb') as f:
-          f.write(cal.to_ical())
-        log.info(f'Created {calendar_path}')
   log.info(f'Created total of {entries_total} entries for {len(users)} calendars')
 
 @easyargs
 class DButils(object):
   """Database utility"""
 
-  def generate_calendars(self, force=False, dry_run=False):
+  def generate_calendars(self, force=False):
     '''
     Generate iCalendar files
     :param force: Force generate if calendar already exists
-    :param dry_run: Do not write changes
     '''
     db.archive('generate_calendars')
-    generate_calendars(force, dry_run)
+    generate_calendars(force)
 
   def generate_task_lists(self, force=False, dry_run=False):
     '''
