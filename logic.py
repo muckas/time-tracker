@@ -275,18 +275,26 @@ def get_task_stats(users, user_id, option=None):
   tzdelta = datetime.timezone(datetime.timedelta(hours=timezone))
   if option == 'alltime':
     stats_type = 'alltime'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'detailed':
     stats_type = 'detailed'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'month':
     stats_type = 'month'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'day':
     stats_type = 'day'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'left':
