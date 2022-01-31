@@ -6,6 +6,7 @@ from contextlib import suppress
 import db
 import tgbot
 import constants
+import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import icalendar
 import uuid
@@ -34,7 +35,8 @@ def update_timer(user_id, message, start_time, task_name):
   timer = int(time.time()) - start_time
   timer = datetime.timedelta(seconds=timer)
   text = f'{task_name}\n{timer}'
-  message.edit_text(text)
+  with suppress(telegram.error.BadRequest):
+    message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
 
 def update_all_timers():
