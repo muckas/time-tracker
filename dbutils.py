@@ -152,7 +152,7 @@ def update_task_ids(force, dry_run):
           task_list = db.read(db_name)
           for event in task_list:
             old_task_id = event['id']
-            new_task_id = task_id_dict[old_task_id]
+            new_task_id = task_id_dict[str(old_task_id)]
             event['id'] = new_task_id
             log.info(f'Changed "{old_task_id}" to "{new_task_id}"')
           if dry_run:
