@@ -18,6 +18,7 @@ def get_default_user(tg_username):
       'active_task':{},
       'tasks':{},
       'stats_type':'alltime',
+      'web_key':None,
       }
 
 def get_default_task(name):

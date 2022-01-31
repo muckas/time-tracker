@@ -115,6 +115,16 @@ def command_calendar(update, context):
   user_id = str(update.message.chat['id'])
   logic.send_calendar(user_id)
 
+def command_link(update, context):
+  log_message(update)
+  users = db.read('users')
+  user_id = str(update.message.chat['id'])
+  try:
+    text = update.message.text.split(' ', 1)[1]
+    logic.generate_new_key(users, user_id, text)
+  except IndexError:
+    logic.send_links(users, user_id)
+
 def callback_handler(update, context):
   users = db.read('users')
   query = update.callback_query
@@ -141,6 +151,7 @@ def start(tg_token):
   dispatcher.add_handler(CommandHandler('cancel', command_menu))
   dispatcher.add_handler(CommandHandler('timer', command_timer))
   dispatcher.add_handler(CommandHandler('calendar', command_calendar))
+  dispatcher.add_handler(CommandHandler('link', command_link))
   dispatcher.add_handler(CallbackQueryHandler(callback_handler))
   dispatcher.add_error_handler(error_handler)
   updater.start_polling()

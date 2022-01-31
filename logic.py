@@ -10,6 +10,7 @@ import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import icalendar
 import uuid
+import hashlib
 
 log = logging.getLogger('main')
 
@@ -30,6 +31,26 @@ def send_calendar(user_id):
   success = tgbot.send_document(user_id, file_path, file_name)
   if not success:
     tgbot.send_message(user_id, 'Couldn\'t find your calendar :-(')
+
+def send_links(users, user_id):
+  web_key = users[user_id]['web_key']
+  params = db.read('params')
+  web_path = params['web_path']
+  if web_key:
+    text = f'''Your calendar link:
+    {web_path}{web_key}/tasks.ics'''
+    tgbot.send_message(user_id, text)
+  else:
+    generate_new_key(users, user_id, '')
+
+def generate_new_key(users, user_id, string):
+  encoded_string = f'{user_id}{string}'.encode()
+  hash_obj = hashlib.md5(encoded_string)
+  hash_hex = hash_obj.hexdigest()
+  users[user_id]['web_key'] = hash_hex
+  db.write('users', users)
+  log.debug(f'Generated new key for user {user_id}')
+  send_links(users, user_id)
 
 def update_timer(user_id, message, start_time, task_name):
   timer = int(time.time()) - start_time
