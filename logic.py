@@ -140,7 +140,7 @@ def add_task(users, user_id, task_name, enabled=True):
       db.write('users', users)
       return f'Enabled task "{task_name}"'
   else: # adding task to db
-    new_task_id = len(get_all_tasks(users, user_id))
+    new_task_id = str(uuid.uuid4())
     users[user_id]['tasks'].update(
         {new_task_id:constants.get_default_task(task_name)}
         )
