@@ -6,9 +6,11 @@ from contextlib import suppress
 import db
 import tgbot
 import constants
+import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import icalendar
 import uuid
+import hashlib
 
 log = logging.getLogger('main')
 
@@ -30,11 +32,32 @@ def send_calendar(user_id):
   if not success:
     tgbot.send_message(user_id, 'Couldn\'t find your calendar :-(')
 
+def send_links(users, user_id):
+  web_key = users[user_id]['web_key']
+  params = db.read('params')
+  web_path = params['web_path']
+  if web_key:
+    text = f'''Your calendar link:
+    {web_path}{web_key}/tasks.ics'''
+    tgbot.send_message(user_id, text)
+  else:
+    generate_new_key(users, user_id, '')
+
+def generate_new_key(users, user_id, string):
+  encoded_string = f'{user_id}{string}'.encode()
+  hash_obj = hashlib.md5(encoded_string)
+  hash_hex = hash_obj.hexdigest()
+  users[user_id]['web_key'] = hash_hex
+  db.write('users', users)
+  log.debug(f'Generated new key for user {user_id}')
+  send_links(users, user_id)
+
 def update_timer(user_id, message, start_time, task_name):
   timer = int(time.time()) - start_time
   timer = datetime.timedelta(seconds=timer)
   text = f'{task_name}\n{timer}'
-  message.edit_text(text)
+  with suppress(telegram.error.BadRequest):
+    message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
 
 def update_all_timers():
@@ -140,7 +163,7 @@ def add_task(users, user_id, task_name, enabled=True):
       db.write('users', users)
       return f'Enabled task "{task_name}"'
   else: # adding task to db
-    new_task_id = len(get_all_tasks(users, user_id))
+    new_task_id = str(uuid.uuid4())
     users[user_id]['tasks'].update(
         {new_task_id:constants.get_default_task(task_name)}
         )
@@ -206,22 +229,34 @@ def write_to_ical(users, user_id, task_id, start_time, end_time):
   calendar_path = os.path.join('db', 'data', user_id, calendar_name)
   timezone = users[user_id]['timezone']
   if os.path.isfile(calendar_path):
+    log.debug(f'Reading from {calendar_path}')
     cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
   else:
-    cal = constants.get_new_calendar('Time-Tracker-Tasks', timezone)
-  summary = users[user_id]['tasks'][task_id]['name']
+    log.debug(f'Making new calendar')
+    cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+  task_duration = end_time - start_time
+  if task_duration < 60 * 60:
+    task_duration /= 60
+    task_duration = f' {int(task_duration)}m'
+  else:
+    task_duration /= 60 * 60
+    task_duration = f' {task_duration:.1f}h'
+  summary = users[user_id]['tasks'][task_id]['name'] + task_duration
   tzoffset_hours = timezone
   tzoffset_sec = tzoffset_hours * 60 * 60
   dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
   dtend = datetime.datetime.utcfromtimestamp(end_time + tzoffset_sec)
   event = icalendar.Event()
-  event.add('UID', uuid.uuid4())
+  event_id = uuid.uuid4()
+  event.add('UID', event_id)
   event.add('summary', summary)
   event.add('tzoffset', tzoffset_hours)
   event.add('dtstart', dtstart)
   event.add('dtend', dtend)
   cal.add_component(event)
+  log.debug(f'Added event {event_id} to calendar')
   with open(calendar_path, 'wb') as f:
+    log.debug(f'Writing to {calendar_path}')
     f.write(cal.to_ical())
 
 def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
@@ -263,18 +298,26 @@ def get_task_stats(users, user_id, option=None):
   tzdelta = datetime.timezone(datetime.timedelta(hours=timezone))
   if option == 'alltime':
     stats_type = 'alltime'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'detailed':
     stats_type = 'detailed'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'month':
     stats_type = 'month'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'day':
     stats_type = 'day'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'left':

@@ -8,6 +8,7 @@ import db
 import easyargs
 import icalendar
 import uuid
+import logic
 
 # Logger setup
 with suppress(FileExistsError):
@@ -109,6 +110,13 @@ def check_data():
     log.info(f'Data check complete, {missing_total} missing entries created')
   return missing_total
 
+def is_uuid4(string):
+  try:
+    val = uuid.UUID(string, version=4)
+    return True
+  except ValueError:
+    return False
+
 def update_task_ids(force, dry_run):
   log.info('Updating task IDs...')
   updated_tasks = 0
@@ -118,70 +126,72 @@ def update_task_ids(force, dry_run):
     #Updating tasks
     log.info(f'Updating tasks for user {user_id}')
     task_id_dict = {}
-    task_id = 0
-    for task_name in users[user_id]['tasks'].copy():
-      if task_name.isdigit() and not force:
-        log.warning(f'Key for task {task_name} is an integer and --force is not specified, aborting')
+    for old_task_id in users[user_id]['tasks'].copy():
+      if is_uuid4(old_task_id) and not force:
+        log.warning(f'Key for task {old_task_id} is a valid uuid4 and --force is not specified, aborting')
         return
-      users[user_id]['tasks'][task_id] = users[user_id]['tasks'][task_name]
-      users[user_id]['tasks'][task_id]['name'] = task_name
-      users[user_id]['tasks'].pop(task_name)
-      task_id_dict[task_name] = task_id
-      log.info(f'Key for task "{task_name}" changed to {task_id}')
+      new_task_id = str(uuid.uuid4())
+      users[user_id]['tasks'][new_task_id] = users[user_id]['tasks'][old_task_id]
+      users[user_id]['tasks'].pop(old_task_id)
+      task_id_dict[old_task_id] = new_task_id
+      log.info(f'Key for task "{old_task_id}" changed to {new_task_id}')
       updated_tasks += 1
-      task_id += 1
+    #Writing changes to user
+    if dry_run:
+      log.info('--dry-run, not writing changes to "users"')
+    else:
+      db.write('users', users)
     #Updating data
     log.info('Updating data for user {user_id}')
     data_dir = os.path.join('db', 'data', user_id)
     for path, subdirs, files in os.walk(data_dir):
       for name in files:
-        missing_local = 0
-        db_name = os.path.join(path, name)[3:-5] # remove "db/" and ".json" from name
-        log.info(f'Updating {db_name}')
-        diary = db.read(db_name)
-        log.info('Updating tasks_total')
-        for task_name in diary['tasks_total'].copy():
-          if task_name.isdigit() and not force:
-            log.warning(f'Key for task {task_name} is an integer and --force is not specified, aborting')
-            return
-          task_id = task_id_dict[task_name]
-          diary['tasks_total'][task_id] = diary['tasks_total'][task_name]
-          diary['tasks_total'].pop(task_name)
-          log.info(f'Changed "{task_name}" to "{task_id}"')
-          updated_data += 1
-        for day in diary['days']:
-          log.info(f'Updating day {day}')
-          log.info(f'Updating tasks_total')
-          for task_name in diary['days'][day]['tasks_total'].copy():
-            if task_name.isdigit() and not force:
-              log.warning(f'Key for task {task_name} is an integer and --force is not specified, aborting')
-              return
-            task_id = task_id_dict[task_name]
-            diary['days'][day]['tasks_total'][task_id] = diary['days'][day]['tasks_total'][task_name]
-            diary['days'][day]['tasks_total'].pop(task_name)
-            log.info(f'Changed "{task_name}" to "{task_id}"')
-            updated_data += 1
-          # Updating history
-          log.info('Updating history')
-          task_list = []
-          updated_entries = 0
-          for entry in diary['days'][day]['history'].copy():
-            entry['id'] = task_id_dict[entry['name']]
-            entry.pop('name')
-            task_list.append(entry)
-            updated_data += 1
-            updated_entries += 1
-          diary['days'][day]['tasks'] = task_list
-          diary['days'][day].pop('history')
-          log.info(f'{updated_entries} entries moved from "history" to "tasks"')
-        if dry_run:
-          log.info(f'--dry-run, not writing changes to "{db_name}"')
+        if f'tasks-{user_id}' in name:
+          db_name = os.path.join(path, name)[3:-5] # remove "db/" and ".json" from name
+          log.info(f'Updating task_list {db_name}')
+          task_list = db.read(db_name)
+          for event in task_list:
+            old_task_id = event['id']
+            new_task_id = task_id_dict[old_task_id]
+            event['id'] = new_task_id
+            log.info(f'Changed "{old_task_id}" to "{new_task_id}"')
+          if dry_run:
+            log.info(f'--dry-run, not writing changes to "{db_name}"')
+          else:
+            db.write(db_name, task_list)
+        elif 'calendar' in name:
+          pass
         else:
-          db.write(db_name, diary)
-  if dry_run:
-    log.info('--dry-run, not writing changes to "users"')
-  else:
-    db.write('users', users)
+          missing_local = 0
+          db_name = os.path.join(path, name)[3:-5] # remove "db/" and ".json" from name
+          log.info(f'Updating {db_name}')
+          diary = db.read(db_name)
+          log.info('Updating tasks_total')
+          for old_task_id in diary['tasks_total'].copy():
+            if is_uuid4(old_task_id) and not force:
+              log.warning(f'Key for task {old_task_id} is a valid uuid4 and --force is not specified, aborting')
+              return
+            new_task_id = task_id_dict[old_task_id]
+            diary['tasks_total'][new_task_id] = diary['tasks_total'][old_task_id]
+            diary['tasks_total'].pop(old_task_id)
+            log.info(f'Changed "{old_task_id}" to "{new_task_id}"')
+            updated_data += 1
+          for day in diary['days']:
+            log.info(f'Updating day {day}')
+            log.info(f'Updating tasks_total')
+            for old_task_id in diary['days'][day]['tasks_total'].copy():
+              if is_uuid4(old_task_id) and not force:
+                log.warning(f'Key for task {old_task_id} is a valid uuid4 and --force is not specified, aborting')
+                return
+              new_task_id = task_id_dict[old_task_id]
+              diary['days'][day]['tasks_total'][new_task_id] = diary['days'][day]['tasks_total'][old_task_id]
+              diary['days'][day]['tasks_total'].pop(old_task_id)
+              log.info(f'Changed "{old_task_id}" to "{new_task_id}"')
+              updated_data += 1
+          if dry_run:
+            log.info(f'--dry-run, not writing changes to "{db_name}"')
+          else:
+            db.write(db_name, diary)
   log.info(f'Complete, {updated_tasks} tasks updated, {updated_data} entries updated')
 
 def generate_task_lists(force, dry_run):
@@ -231,7 +241,7 @@ def generate_task_lists(force, dry_run):
       log.warning(f'Path {folder} does not exist, skipping')
   log.info(f'{entries_total} total entries created')
 
-def generate_calendars(force, dry_run):
+def generate_calendars(force):
   log.info('Started calendar generation')
   users = db.read('users')
   entries_total = 0
@@ -242,48 +252,36 @@ def generate_calendars(force, dry_run):
       log.warning(f'{calendar_path} already exists and --force is not specified, aborting')
       return
     log.info(f'Generating {calendar_name} for user {user_id}')
-    events_total = 0
     timezone = users[user_id]['timezone']
-    cal = constants.get_new_calendar('Time-Tracker-Tasks', timezone)
+    cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+    with open(calendar_path, 'wb') as f:
+      log.debug(f'Writing to {calendar_path}')
+      f.write(cal.to_ical())
+    events_total = 0
     task_list = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
     if task_list:
       for task in task_list:
         task_id = str(task['id'])
-        summary = users[user_id]['tasks'][task_id]['name']
-        tzoffset_hours = task['timezone']
-        tzoffset_sec = tzoffset_hours * 60 * 60
-        dtstart = datetime.datetime.utcfromtimestamp(task['start'] + tzoffset_sec)
-        dtend = datetime.datetime.utcfromtimestamp(task['end'] + tzoffset_sec)
-        event = icalendar.Event()
-        event.add('UID', uuid.uuid4())
-        event.add('summary', summary)
-        event.add('tzoffset', tzoffset_hours)
-        event.add('dtstart', dtstart)
-        event.add('dtend', dtend)
-        cal.add_component(event)
+        log.info(f'Task {task_id}')
+        start_time = task['start']
+        end_time = task['end']
+        logic.write_to_ical(users, user_id, task_id, start_time, end_time)
         events_total += 1
         entries_total += 1
       log.info(f'Generated {events_total} events for {calendar_path}')
-      if dry_run:
-        log.info(f'--dry-run, not writing {calendar_path}')
-      else:
-        with open(calendar_path, 'wb') as f:
-          f.write(cal.to_ical())
-        log.info(f'Created {calendar_path}')
   log.info(f'Created total of {entries_total} entries for {len(users)} calendars')
 
 @easyargs
 class DButils(object):
   """Database utility"""
 
-  def generate_calendars(self, force=False, dry_run=False):
+  def generate_calendars(self, force=False):
     '''
     Generate iCalendar files
     :param force: Force generate if calendar already exists
-    :param dry_run: Do not write changes
     '''
     db.archive('generate_calendars')
-    generate_calendars(force, dry_run)
+    generate_calendars(force)
 
   def generate_task_lists(self, force=False, dry_run=False):
     '''
@@ -296,7 +294,7 @@ class DButils(object):
 
   def task_id_update(self, force=False, dry_run=False):
     '''
-    Tasks ID update (v0.7.0)
+    Tasks updae to UUID (v0.8.0)
     :param force: Force update even if id is already integer
     :param dry_run: Do not write changes
     '''

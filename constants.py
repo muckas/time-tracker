@@ -18,6 +18,7 @@ def get_default_user(tg_username):
       'active_task':{},
       'tasks':{},
       'stats_type':'alltime',
+      'web_key':None,
       }
 
 def get_default_task(name):
@@ -51,7 +52,7 @@ def get_default_list_task(task_id, timezone, start_time, end_time):
 
 def get_new_calendar(name, timezone):
   cal = icalendar.Calendar()
-  cal.add('X-WR-CALNAME', 'Time-Tracker-Tasks')
+  cal.add('X-WR-CALNAME', name)
   cal.add('TZOFFSET', timezone)
   return cal
 
