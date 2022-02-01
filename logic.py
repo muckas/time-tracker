@@ -333,6 +333,12 @@ def get_task_stats(users, user_id, option=None):
     temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
+  elif option == 'year':
+    stats_type = 'year'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
+    users[user_id]['stats_type'] = stats_type
+    db.write('users', users)
   elif option == 'month':
     stats_type = 'month'
     stats_delta = 0
@@ -364,11 +370,14 @@ def get_task_stats(users, user_id, option=None):
       task_status = ''
       if not task_info['enabled']: task_status = '(disabled)'
       report += f'''\n{get_task_name(users, user_id, task_id)}{task_status}
-      Date added: {date_added}
+      Creation date: {date_added}
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
-        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
-        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        [
+        InlineKeyboardButton('Day', callback_data='task_stats:day'),
+        InlineKeyboardButton('Month', callback_data='task_stats:month'),
+        InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
         [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -383,9 +392,47 @@ def get_task_stats(users, user_id, option=None):
       time_total_hours = task_info['time_total'] / 60 / 60
       report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     keyboard = [
-        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
-        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        [
+        InlineKeyboardButton('Day', callback_data='task_stats:day'),
+        InlineKeyboardButton('Month', callback_data='task_stats:month'),
+        InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
         [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return report, reply_markup
+
+  elif stats_type == 'year':
+    timedelta = datetime.timedelta(days=30 * stats_delta)
+    date = datetime.datetime.now(tzdelta) - timedelta
+    filename = f'task-totals-{user_id}'
+    report = f'Year statistics: {date.year}\n--------------------'
+    totals = db.read(os.path.join('data', user_id, filename))
+    if totals:
+      try:
+        year = str(date.year)
+        for task_id in totals[year]['total_time']:
+          task_time = totals[year]['total_time'][task_id]
+          time_total = datetime.timedelta(seconds=task_time)
+          time_total_hours = task_time / 60 / 60
+          report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+      except KeyError:
+        report += f'\nNo data for {date.year}-{date.month}'
+    else:
+      report += f'\nNo data for {date.year}-{date.month}'
+    keyboard = [
+        [
+          InlineKeyboardButton('Day', callback_data='task_stats:day'),
+          InlineKeyboardButton('Month', callback_data='task_stats:month')
+        ],
+        [
+          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+        ],
+        [
+          InlineKeyboardButton('<', callback_data='task_stats:left'),
+          InlineKeyboardButton('>', callback_data='task_stats:right'),
+          ]
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
@@ -410,9 +457,14 @@ def get_task_stats(users, user_id, option=None):
     else:
       report += f'\nNo data for {date.year}-{date.month}'
     keyboard = [
-        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
-        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
-        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        [
+          InlineKeyboardButton('Day', callback_data='task_stats:day'),
+          InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
+        [
+          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+        ],
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
@@ -420,6 +472,7 @@ def get_task_stats(users, user_id, option=None):
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
+
   elif stats_type == 'day':
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
@@ -441,9 +494,14 @@ def get_task_stats(users, user_id, option=None):
     else:
       report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     keyboard = [
-        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
-        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
-        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        [
+          InlineKeyboardButton('Month', callback_data='task_stats:month'),
+          InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
+        [
+          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+        ],
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),

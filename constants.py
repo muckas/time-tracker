@@ -17,7 +17,7 @@ def get_default_user(tg_username):
       'last_task_end_time':int(time.time()),
       'active_task':{},
       'tasks':{},
-      'stats_type':'alltime',
+      'stats_type':'detailed',
       'web_key':None,
       }
 
