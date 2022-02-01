@@ -251,24 +251,27 @@ def generate_calendars(force):
     if os.path.isfile(calendar_path) and not force:
       log.warning(f'{calendar_path} already exists and --force is not specified, aborting')
       return
-    log.info(f'Generating {calendar_name} for user {user_id}')
-    timezone = users[user_id]['timezone']
-    cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
-    with open(calendar_path, 'wb') as f:
-      log.debug(f'Writing to {calendar_path}')
-      f.write(cal.to_ical())
-    events_total = 0
-    task_list = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
-    if task_list:
-      for task in task_list:
-        task_id = str(task['id'])
-        log.info(f'Task {task_id}')
-        start_time = task['start']
-        end_time = task['end']
-        logic.write_to_ical(users, user_id, task_id, start_time, end_time)
-        events_total += 1
-        entries_total += 1
-      log.info(f'Generated {events_total} events for {calendar_path}')
+    try:
+      log.info(f'Generating {calendar_name} for user {user_id}')
+      timezone = users[user_id]['timezone']
+      cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+      with open(calendar_path, 'wb') as f:
+        log.debug(f'Writing to {calendar_path}')
+        f.write(cal.to_ical())
+      events_total = 0
+      task_list = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
+      if task_list:
+        for task in task_list:
+          task_id = str(task['id'])
+          log.info(f'Task {task_id}')
+          start_time = task['start']
+          end_time = task['end']
+          logic.write_to_ical(users, user_id, task_id, start_time, end_time)
+          events_total += 1
+          entries_total += 1
+        log.info(f'Generated {events_total} events for {calendar_path}')
+    except FileNotFoundError:
+      log.info(f'File not found, skipping user {user_id}')
   log.info(f'Created total of {entries_total} entries for {len(users)} calendars')
 
 @easyargs
