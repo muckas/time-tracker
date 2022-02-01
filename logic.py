@@ -74,7 +74,7 @@ def get_new_timer(user_id):
     message = tgbot.send_message(user_id, 'Timer')
     task_name = get_task_name(users, user_id, users[user_id]['active_task']['id'])
     start_time = users[user_id]['active_task']['start_time']
-    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time, 'desired_task':task_name})
+    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time, 'task_name':task_name})
     update_timer(user_id, message, start_time, task_name)
   else:
     tgbot.send_message(user_id, 'No task is active')
@@ -268,7 +268,7 @@ def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
 
 def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)
-  filename = f'{start_date.year}-{start_date.month}-{user_id}'
+  filename = f'task-totals-{user_id}'
   diary_path = os.path.join('data', user_id, filename)
   diary = db.read(diary_path)
   tz_time_total = tz_end_time - tz_start_time
