@@ -74,7 +74,7 @@ def get_new_timer(user_id):
     message = tgbot.send_message(user_id, 'Timer')
     task_name = get_task_name(users, user_id, users[user_id]['active_task']['id'])
     start_time = users[user_id]['active_task']['start_time']
-    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time, 'desired_task':task_name})
+    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time, 'task_name':task_name})
     update_timer(user_id, message, start_time, task_name)
   else:
     tgbot.send_message(user_id, 'No task is active')
@@ -135,6 +135,14 @@ def get_enabled_tasks(users, user_id):
       enabled_tasks.append(task_id)
   return enabled_tasks
 
+def get_disabled_tasks(users, user_id):
+  tasks = users[user_id]['tasks']
+  disabled_tasks = []
+  for task_id in tasks:
+    if not tasks[task_id]['enabled']:
+      disabled_tasks.append(task_id)
+  return disabled_tasks
+
 def get_enabled_tasks_names(users, user_id):
   tasks = users[user_id]['tasks']
   enabled_tasks = []
@@ -142,6 +150,14 @@ def get_enabled_tasks_names(users, user_id):
     if tasks[task_id]['enabled']:
       enabled_tasks.append(tasks[task_id]['name'])
   return enabled_tasks
+
+def get_disabled_tasks_names(users, user_id):
+  tasks = users[user_id]['tasks']
+  disabled_tasks = []
+  for task_id in tasks:
+    if not tasks[task_id]['enabled']:
+      disabled_tasks.append(tasks[task_id]['name'])
+  return disabled_tasks
 
 def get_all_tasks(users, user_id):
   return users[user_id]['tasks'].keys()
@@ -189,7 +205,9 @@ def stop_task(users, user_id, task_id, time_text):
         task_end_time = int(time.time()) - time_interval
     else:
       return None
-  write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time)
+  timezone = users[user_id]['timezone']
+  write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time, timezone)
+  # Writing task total time to users.json
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
   task_duration = datetime.timedelta(seconds=task_duration_sec)
@@ -198,10 +216,10 @@ def stop_task(users, user_id, task_id, time_text):
   db.write('users',users)
   return task_duration
 
-def write_task_to_diary(users, user_id, task_id, start_time, end_time):
-  timezone = users[user_id]['timezone']
-  write_to_task_list(user_id, task_id, timezone, start_time, end_time)
-  write_to_ical(users, user_id, task_id, start_time, end_time)
+def write_task_to_diary(users, user_id, task_id, start_time, end_time, timezone, totals_obj=None):
+  if not totals_obj:
+    write_to_task_list(user_id, task_id, timezone, start_time, end_time)
+    write_to_ical(users, user_id, task_id, start_time, end_time)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -210,10 +228,10 @@ def write_task_to_diary(users, user_id, task_id, start_time, end_time):
   one_second = datetime.timedelta(seconds=1)
   while True:
     if start_date.date() == end_date.date():
-      update_diary_day(users, user_id, task_id, start_date.timestamp(), end_date.timestamp(), timezone)
+      update_task_totals(users, user_id, task_id, start_date.timestamp(), end_date.timestamp(), totals_obj)
       break
     temp_end_date = start_date.replace(hour=23, minute=59, second=59)
-    update_diary_day(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), timezone)
+    update_task_totals(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), totals_obj)
     start_date = temp_end_date + one_second
 
 def write_to_task_list(user_id, task_id, timezone, start_time, end_time):
@@ -224,16 +242,19 @@ def write_to_task_list(user_id, task_id, timezone, start_time, end_time):
   task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
   db.write(task_list_path, task_list)
 
-def write_to_ical(users, user_id, task_id, start_time, end_time):
+def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
   calendar_name = f'tasks-calendar-{user_id}.ics'
   calendar_path = os.path.join('db', 'data', user_id, calendar_name)
   timezone = users[user_id]['timezone']
-  if os.path.isfile(calendar_path):
-    log.debug(f'Reading from {calendar_path}')
-    cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
+  if ical_obj:
+    cal = ical_obj
   else:
-    log.debug(f'Making new calendar')
-    cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+    if os.path.isfile(calendar_path):
+      log.debug(f'Reading from {calendar_path}')
+      cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
+    else:
+      log.debug(f'Making new calendar')
+      cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
   task_duration = end_time - start_time
   if task_duration < 60 * 60:
     task_duration /= 60
@@ -255,41 +276,61 @@ def write_to_ical(users, user_id, task_id, start_time, end_time):
   event.add('dtend', dtend)
   cal.add_component(event)
   log.debug(f'Added event {event_id} to calendar')
-  with open(calendar_path, 'wb') as f:
-    log.debug(f'Writing to {calendar_path}')
-    f.write(cal.to_ical())
+  if ical_obj:
+    return cal
+  else:
+    with open(calendar_path, 'wb') as f:
+      log.debug(f'Writing to {calendar_path}')
+      f.write(cal.to_ical())
+    return
 
-def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
+def update_task_totals(users, user_id, task_id, tz_start_time, tz_end_time, totals_obj=None):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)
-  filename = f'{start_date.year}-{start_date.month}-{user_id}'
-  diary_path = os.path.join('data', user_id, filename)
-  diary = db.read(diary_path)
+  if totals_obj:
+    totals = totals_obj
+  else:
+    filename = f'task-totals-{user_id}'
+    totals_path = os.path.join('data', user_id, filename)
+    totals = db.read(totals_path)
   tz_time_total = tz_end_time - tz_start_time
-  if not diary:
-    diary = constants.get_defaul_diary()
+  if not totals:
+    totals = {'total_time':{}}
+  year_number = str(start_date.year)
+  month_number = str(start_date.month)
   day_number = str(start_date.day)
-  if day_number not in diary['days'].keys():
-    diary['days'][day_number] = constants.get_default_day(timezone)
+  if year_number not in totals.keys():
+    totals[year_number] = {'total_time':{}}
+  if month_number not in totals[year_number].keys():
+    totals[year_number][month_number] = {'total_time':{}}
+  if day_number not in totals[year_number][month_number].keys():
+    totals[year_number][month_number][day_number] = {'total_time':{}}
 
+  # All time
   try:
-    diary['tasks_total'][task_id] += tz_time_total
+    totals['total_time'][task_id] += tz_time_total
   except KeyError:
-    diary['tasks_total'][task_id] = tz_time_total
+    totals['total_time'][task_id] = tz_time_total
+  # Year
   try:
-    diary['days'][day_number]['tasks_total'][task_id] += tz_time_total
+    totals[year_number]['total_time'][task_id] += tz_time_total
   except KeyError:
-    diary['days'][day_number]['tasks_total'][task_id] = tz_time_total
+    totals[year_number]['total_time'][task_id] = tz_time_total
+  # Month
+  try:
+    totals[year_number][month_number]['total_time'][task_id] += tz_time_total
+  except KeyError:
+    totals[year_number][month_number]['total_time'][task_id] = tz_time_total
+  # Day
+  try:
+    totals[year_number][month_number][day_number]['total_time'][task_id] += tz_time_total
+  except KeyError:
+    totals[year_number][month_number][day_number]['total_time'][task_id] = tz_time_total
 
-  diary['days'][day_number]['tasks'].append(
-      {
-        'type':'task',
-        'id':task_id,
-        'start_time':tz_start_time,
-        'end_time':tz_end_time,
-        'total_time':tz_time_total
-        }
-      )
-  db.write(diary_path, diary)
+  if totals_obj:
+    return totals
+  else:
+    db.write(totals_path, totals)
+    return
 
 def get_task_stats(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
@@ -304,6 +345,12 @@ def get_task_stats(users, user_id, option=None):
     db.write('users', users)
   elif option == 'detailed':
     stats_type = 'detailed'
+    stats_delta = 0
+    temp_vars[user_id]['stats_delta'] = 0
+    users[user_id]['stats_type'] = stats_type
+    db.write('users', users)
+  elif option == 'year':
+    stats_type = 'year'
     stats_delta = 0
     temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
@@ -339,11 +386,14 @@ def get_task_stats(users, user_id, option=None):
       task_status = ''
       if not task_info['enabled']: task_status = '(disabled)'
       report += f'''\n{get_task_name(users, user_id, task_id)}{task_status}
-      Date added: {date_added}
+      Creation date: {date_added}
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
-        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
-        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        [
+        InlineKeyboardButton('Day', callback_data='task_stats:day'),
+        InlineKeyboardButton('Month', callback_data='task_stats:month'),
+        InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
         [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -358,31 +408,43 @@ def get_task_stats(users, user_id, option=None):
       time_total_hours = task_info['time_total'] / 60 / 60
       report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     keyboard = [
-        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
-        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
+        [
+        InlineKeyboardButton('Day', callback_data='task_stats:day'),
+        InlineKeyboardButton('Month', callback_data='task_stats:month'),
+        InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
         [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
-  elif stats_type == 'month':
+  elif stats_type == 'year':
     timedelta = datetime.timedelta(days=30 * stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'{date.year}-{date.month}-{user_id}'
-    report = f'Month statistics: {date.year}-{date.month}\n--------------------'
-    diary = db.read(os.path.join('data', user_id, filename))
-    if diary:
-      for task_id in diary['tasks_total']:
-        task_time = diary['tasks_total'][task_id]
-        time_total = datetime.timedelta(seconds=task_time)
-        time_total_hours = task_time / 60 / 60
-        report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+    filename = f'task-totals-{user_id}'
+    report = f'Year statistics: {date.year}\n--------------------'
+    totals = db.read(os.path.join('data', user_id, filename))
+    if totals:
+      try:
+        year = str(date.year)
+        for task_id in totals[year]['total_time']:
+          task_time = totals[year]['total_time'][task_id]
+          time_total = datetime.timedelta(seconds=task_time)
+          time_total_hours = task_time / 60 / 60
+          report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+      except KeyError:
+        report += f'\nNo data for {date.year}-{date.month}'
     else:
       report += f'\nNo data for {date.year}-{date.month}'
     keyboard = [
-        [InlineKeyboardButton('Day', callback_data='task_stats:day')],
-        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
-        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        [
+          InlineKeyboardButton('Day', callback_data='task_stats:day'),
+          InlineKeyboardButton('Month', callback_data='task_stats:month')
+        ],
+        [
+          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+        ],
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
@@ -390,25 +452,72 @@ def get_task_stats(users, user_id, option=None):
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
+
+  elif stats_type == 'month':
+    timedelta = datetime.timedelta(days=30 * stats_delta)
+    date = datetime.datetime.now(tzdelta) - timedelta
+    filename = f'task-totals-{user_id}'
+    report = f'Month statistics: {date.year}-{date.month}\n--------------------'
+    totals = db.read(os.path.join('data', user_id, filename))
+    if totals:
+      try:
+        year = str(date.year)
+        month = str(date.month)
+        for task_id in totals[year][month]['total_time']:
+          task_time = totals[year][month]['total_time'][task_id]
+          time_total = datetime.timedelta(seconds=task_time)
+          time_total_hours = task_time / 60 / 60
+          report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+      except KeyError:
+        report += f'\nNo data for {date.year}-{date.month}'
+    else:
+      report += f'\nNo data for {date.year}-{date.month}'
+    keyboard = [
+        [
+          InlineKeyboardButton('Day', callback_data='task_stats:day'),
+          InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
+        [
+          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+        ],
+        [
+          InlineKeyboardButton('<', callback_data='task_stats:left'),
+          InlineKeyboardButton('>', callback_data='task_stats:right'),
+          ]
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return report, reply_markup
+
   elif stats_type == 'day':
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'{date.year}-{date.month}-{user_id}'
+    filename = f'task-totals-{user_id}'
     report = f'Day statistics: {date.year}-{date.month}-{date.day}\n--------------------'
-    diary = db.read(os.path.join('data', user_id, filename))
-    day = str(date.day)
-    if diary and day in diary['days'].keys():
-      for task_id in diary['days'][day]['tasks_total']:
-        task_time = diary['days'][day]['tasks_total'][task_id]
-        time_total = datetime.timedelta(seconds=task_time)
-        time_total_hours = task_time / 60 / 60
-        report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+    totals = db.read(os.path.join('data', user_id, filename))
+    if totals:
+      try:
+        year = str(date.year)
+        month = str(date.month)
+        day = str(date.day)
+        for task_id in totals[year][month][day]['total_time']:
+          task_time = totals[year][month][day]['total_time'][task_id]
+          time_total = datetime.timedelta(seconds=task_time)
+          time_total_hours = task_time / 60 / 60
+          report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+      except KeyError:
+        report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     else:
       report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     keyboard = [
-        [InlineKeyboardButton('Month', callback_data='task_stats:month')],
-        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
-        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        [
+          InlineKeyboardButton('Month', callback_data='task_stats:month'),
+          InlineKeyboardButton('Year', callback_data='task_stats:year')
+        ],
+        [
+          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+        ],
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
@@ -454,8 +563,9 @@ def menu_handler(user_id, text):
 
     task_name = temp_vars[user_id]['task_name']
     task_id = get_task_id(users, user_id, task_name)
-    if task_name not in get_all_tasks_names(users, user_id):
+    if not task_id:
       add_task(users, user_id, task_name, enabled=False)
+      task_id = get_task_id(users, user_id, task_name)
       tgbot.send_message(user_id, f'Added custom task {task_name}')
     users[user_id]['active_task'] = {
         'id': task_id,
@@ -470,11 +580,25 @@ def menu_handler(user_id, text):
 
   # STATE - start_task_time
   if state == 'start_task_time':
-    task_name = text
-    temp_vars[user_id].update({'task_name':task_name})
-    keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
-    tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
-    change_state(users, user_id, 'start_task')
+    if text == constants.get_name('show_disabled'):
+      tasks = get_disabled_tasks_names(users, user_id)
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        keyboard += [constants.get_name('show_enabled')],
+        tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
+      else:
+        tgbot.send_message(user_id, 'No disabled tasks\n/cancel')
+    elif text == constants.get_name('show_enabled'):
+      tasks = get_enabled_tasks_names(users, user_id)
+      keyboard = get_options_keyboard(tasks, columns=3)
+      keyboard += [constants.get_name('show_disabled')],
+      tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
+    else:
+      task_name = text
+      temp_vars[user_id].update({'task_name':task_name})
+      keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+      tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
+      change_state(users, user_id, 'start_task')
 
   if state == 'stop_task':
     time_interval = text
@@ -546,6 +670,7 @@ def menu_handler(user_id, text):
       tasks = get_enabled_tasks_names(users, user_id)
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
+        keyboard += [constants.get_name('show_disabled')],
         tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'start_task_time')
       else:

@@ -17,7 +17,7 @@ def get_default_user(tg_username):
       'last_task_end_time':int(time.time()),
       'active_task':{},
       'tasks':{},
-      'stats_type':'alltime',
+      'stats_type':'detailed',
       'web_key':None,
       }
 
@@ -27,19 +27,6 @@ def get_default_task(name):
       'enabled': True,
       'date_added': int(time.time()),
       'time_total': 0,
-      }
-
-def get_defaul_diary():
-  return {
-      'tasks_total':{},
-      'days':{},
-      }
-
-def get_default_day(timezone):
-  return {
-      'timezone':timezone,
-      'tasks_total':{},
-      'tasks':[],
       }
 
 def get_default_list_task(task_id, timezone, start_time, end_time):
@@ -66,6 +53,8 @@ def get_name(name):
     'task_stats':'Show task stats',
     'set_timezone':'Set timezone',
     'now':'Now',
+    'show_disabled':'Show disabled tasks',
+    'show_enabled':'Show enabled tasks',
     }
   return names[name]
 
