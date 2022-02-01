@@ -224,16 +224,19 @@ def write_to_task_list(user_id, task_id, timezone, start_time, end_time):
   task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
   db.write(task_list_path, task_list)
 
-def write_to_ical(users, user_id, task_id, start_time, end_time):
+def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
   calendar_name = f'tasks-calendar-{user_id}.ics'
   calendar_path = os.path.join('db', 'data', user_id, calendar_name)
   timezone = users[user_id]['timezone']
-  if os.path.isfile(calendar_path):
-    log.debug(f'Reading from {calendar_path}')
-    cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
+  if ical_obj:
+    cal = ical_obj
   else:
-    log.debug(f'Making new calendar')
-    cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+    if os.path.isfile(calendar_path):
+      log.debug(f'Reading from {calendar_path}')
+      cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
+    else:
+      log.debug(f'Making new calendar')
+      cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
   task_duration = end_time - start_time
   if task_duration < 60 * 60:
     task_duration /= 60
@@ -255,9 +258,13 @@ def write_to_ical(users, user_id, task_id, start_time, end_time):
   event.add('dtend', dtend)
   cal.add_component(event)
   log.debug(f'Added event {event_id} to calendar')
-  with open(calendar_path, 'wb') as f:
-    log.debug(f'Writing to {calendar_path}')
-    f.write(cal.to_ical())
+  if ical_obj:
+    return cal
+  else:
+    with open(calendar_path, 'wb') as f:
+      log.debug(f'Writing to {calendar_path}')
+      f.write(cal.to_ical())
+    return
 
 def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)

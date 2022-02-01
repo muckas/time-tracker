@@ -241,7 +241,7 @@ def generate_task_lists(force, dry_run):
       log.warning(f'Path {folder} does not exist, skipping')
   log.info(f'{entries_total} total entries created')
 
-def generate_calendars(force):
+def generate_calendars(force, dry_run):
   log.info('Started calendar generation')
   users = db.read('users')
   entries_total = 0
@@ -255,21 +255,23 @@ def generate_calendars(force):
       log.info(f'Generating {calendar_name} for user {user_id}')
       timezone = users[user_id]['timezone']
       cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
-      with open(calendar_path, 'wb') as f:
-        log.debug(f'Writing to {calendar_path}')
-        f.write(cal.to_ical())
       events_total = 0
       task_list = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
       if task_list:
         for task in task_list:
           task_id = str(task['id'])
-          log.info(f'Task {task_id}')
           start_time = task['start']
           end_time = task['end']
-          logic.write_to_ical(users, user_id, task_id, start_time, end_time)
+          cal = logic.write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=cal)
           events_total += 1
           entries_total += 1
         log.info(f'Generated {events_total} events for {calendar_path}')
+      if dry_run:
+        log.info(f'--dry-run, not writing {calendar_path}')
+      else:
+        with open(calendar_path, 'wb') as f:
+          log.debug(f'Writing to {calendar_path}')
+          f.write(cal.to_ical())
     except FileNotFoundError:
       log.info(f'File not found, skipping user {user_id}')
   log.info(f'Created total of {entries_total} entries for {len(users)} calendars')
@@ -278,13 +280,14 @@ def generate_calendars(force):
 class DButils(object):
   """Database utility"""
 
-  def generate_calendars(self, force=False):
+  def generate_calendars(self, force=False, dry_run=False):
     '''
     Generate iCalendar files
     :param force: Force generate if calendar already exists
+    :param dry_run: Do not write changes
     '''
     db.archive('generate_calendars')
-    generate_calendars(force)
+    generate_calendars(force, dry_run)
 
   def generate_task_lists(self, force=False, dry_run=False):
     '''
