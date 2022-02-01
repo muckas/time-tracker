@@ -118,6 +118,7 @@ def is_uuid4(string):
     return False
 
 def update_task_ids(force, dry_run):
+  log.info('---------------------------')
   log.info('Updating task IDs...')
   updated_tasks = 0
   updated_data = 0
@@ -195,6 +196,7 @@ def update_task_ids(force, dry_run):
   log.info(f'Complete, {updated_tasks} tasks updated, {updated_data} entries updated')
 
 def generate_task_lists(force, dry_run):
+  log.info('---------------------------')
   log.info('Started task list generaion')
   users = db.read('users')
   task_list = []
@@ -242,6 +244,7 @@ def generate_task_lists(force, dry_run):
   log.info(f'{entries_total} total entries created')
 
 def generate_calendars(force, dry_run):
+  log.info('---------------------------')
   log.info('Started calendar generation')
   users = db.read('users')
   entries_total = 0
@@ -276,9 +279,52 @@ def generate_calendars(force, dry_run):
       log.info(f'File not found, skipping user {user_id}')
   log.info(f'Created total of {entries_total} entries for {len(users)} calendars')
 
+def generate_task_totals(force, dry_run):
+  log.info('---------------------------')
+  log.info('Started totals generation')
+  total_entries = 0
+  users = db.read('users')
+  for user_id in users:
+    try:
+      task_list_path = os.path.join('data', user_id, f'tasks-{user_id}')
+      tasks = db.read(task_list_path)
+      if tasks:
+        log.info(f'Generating totals for user {user_id}')
+        user_entries = 0
+        totals_path = os.path.join('data', user_id, f'task-totals-{user_id}')
+        if db.read(totals_path) and not force:
+          log.warning(f'{totals_path} already exists and --force is not specified, aborting')
+          return
+        totals = {'total_time':{}}
+        for task in tasks:
+          task_id = task['id']
+          timezone = task['timezone']
+          start_time = task['start']
+          end_time = task['end']
+          logic.write_task_to_diary(users, user_id, task_id, start_time, end_time, timezone, totals)
+          total_entries += 1
+          user_entries += 1
+        log.info(f'{user_entries} generated for user {user_id}')
+        if dry_run:
+          log.info(f'--dry-run, not writing {totals_path}')
+        else:
+          db.write(totals_path, totals)
+    except FileNotFoundError:
+      log.info(f'File not found, skipping user {user_id}')
+  log.info(f'Generated a total of {total_entries} entries for {len(users)} users')
+
 @easyargs
 class DButils(object):
   """Database utility"""
+
+  def generate_task_totals(self, force=False, dry_run=False):
+    '''
+    Generate iCalendar files
+    :param force: Force generate if totals already exists
+    :param dry_run: Do not write changes
+    '''
+    db.archive('generate_task_totals')
+    generate_task_totals(force, dry_run)
 
   def generate_calendars(self, force=False, dry_run=False):
     '''
@@ -289,23 +335,25 @@ class DButils(object):
     db.archive('generate_calendars')
     generate_calendars(force, dry_run)
 
-  def generate_task_lists(self, force=False, dry_run=False):
-    '''
-    Generate task list files
-    :param force: Force generate if task list already exists
-    :param dry_run: Do not write changes
-    '''
-    db.archive('generate_task_lists')
-    generate_task_lists(force, dry_run)
+  # DATA removed in v0.9.0
+  # def generate_task_lists(self, force=False, dry_run=False):
+  #   '''
+  #   Generate task list files
+  #   :param force: Force generate if task list already exists
+  #   :param dry_run: Do not write changes
+  #   '''
+  #   db.archive('generate_task_lists')
+  #   generate_task_lists(force, dry_run)
 
-  def task_id_update(self, force=False, dry_run=False):
-    '''
-    Tasks updae to UUID (v0.8.0)
-    :param force: Force update even if id is already integer
-    :param dry_run: Do not write changes
-    '''
-    db.archive('task_id_update')
-    update_task_ids(force, dry_run)
+  # DATA removed in v0.9.0
+  # def task_id_update(self, force=False, dry_run=False):
+  #   '''
+  #   Tasks update to UUID (v0.8.0)
+  #   :param force: Force update even if id is already integer
+  #   :param dry_run: Do not write changes
+  #   '''
+  #   db.archive('task_id_update')
+  #   update_task_ids(force, dry_run)
 
   def backup(self, name='backup', max_backups=0):
     '''
@@ -322,11 +370,12 @@ class DButils(object):
     """
     missing_total = 0
     date = datetime.datetime.now()
+    log.info('---------------------------')
     log.info(f'Database check started on {date}')
     db.archive(filename='update')
     missing_total += check_params()
     missing_total += check_users()
-    missing_total += check_data()
+    # missing_total += check_data() # DATA removed in v0.9.0
     log.info(f'Database check complete, total of {missing_total} missing entries created')
 
 if __name__ == '__main__':
