@@ -189,7 +189,9 @@ def stop_task(users, user_id, task_id, time_text):
         task_end_time = int(time.time()) - time_interval
     else:
       return None
-  write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time)
+  timezone = users[user_id]['timezone']
+  write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time, timezone)
+  # Writing task total time to users.json
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
   task_duration = datetime.timedelta(seconds=task_duration_sec)
@@ -198,10 +200,10 @@ def stop_task(users, user_id, task_id, time_text):
   db.write('users',users)
   return task_duration
 
-def write_task_to_diary(users, user_id, task_id, start_time, end_time):
-  timezone = users[user_id]['timezone']
-  write_to_task_list(user_id, task_id, timezone, start_time, end_time)
-  write_to_ical(users, user_id, task_id, start_time, end_time)
+def write_task_to_diary(users, user_id, task_id, start_time, end_time, timezone, totals_obj=None):
+  if not totals_obj:
+    write_to_task_list(user_id, task_id, timezone, start_time, end_time)
+    write_to_ical(users, user_id, task_id, start_time, end_time)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -210,10 +212,10 @@ def write_task_to_diary(users, user_id, task_id, start_time, end_time):
   one_second = datetime.timedelta(seconds=1)
   while True:
     if start_date.date() == end_date.date():
-      update_diary_day(users, user_id, task_id, start_date.timestamp(), end_date.timestamp(), timezone)
+      update_task_totals(users, user_id, task_id, start_date.timestamp(), end_date.timestamp(), totals_obj)
       break
     temp_end_date = start_date.replace(hour=23, minute=59, second=59)
-    update_diary_day(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), timezone)
+    update_task_totals(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), totals_obj)
     start_date = temp_end_date + one_second
 
 def write_to_task_list(user_id, task_id, timezone, start_time, end_time):
@@ -266,37 +268,53 @@ def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
       f.write(cal.to_ical())
     return
 
-def update_diary_day(users, user_id, task_id, tz_start_time, tz_end_time, timezone):
+def update_task_totals(users, user_id, task_id, tz_start_time, tz_end_time, totals_obj=None):
   start_date = datetime.datetime.utcfromtimestamp(tz_start_time)
-  filename = f'task-totals-{user_id}'
-  diary_path = os.path.join('data', user_id, filename)
-  diary = db.read(diary_path)
+  if totals_obj:
+    totals = totals_obj
+  else:
+    filename = f'task-totals-{user_id}'
+    totals_path = os.path.join('data', user_id, filename)
+    totals = db.read(totals_path)
   tz_time_total = tz_end_time - tz_start_time
-  if not diary:
-    diary = constants.get_defaul_diary()
+  if not totals:
+    totals = {'total_time':{}}
+  year_number = str(start_date.year)
+  month_number = str(start_date.month)
   day_number = str(start_date.day)
-  if day_number not in diary['days'].keys():
-    diary['days'][day_number] = constants.get_default_day(timezone)
+  if year_number not in totals.keys():
+    totals[year_number] = {'total_time':{}}
+  if month_number not in totals[year_number].keys():
+    totals[year_number][month_number] = {'total_time':{}}
+  if day_number not in totals[year_number][month_number].keys():
+    totals[year_number][month_number][day_number] = {'total_time':{}}
 
+  # All time
   try:
-    diary['tasks_total'][task_id] += tz_time_total
+    totals['total_time'][task_id] += tz_time_total
   except KeyError:
-    diary['tasks_total'][task_id] = tz_time_total
+    totals['total_time'][task_id] = tz_time_total
+  # Year
   try:
-    diary['days'][day_number]['tasks_total'][task_id] += tz_time_total
+    totals[year_number]['total_time'][task_id] += tz_time_total
   except KeyError:
-    diary['days'][day_number]['tasks_total'][task_id] = tz_time_total
+    totals[year_number]['total_time'][task_id] = tz_time_total
+  # Month
+  try:
+    totals[year_number][month_number]['total_time'][task_id] += tz_time_total
+  except KeyError:
+    totals[year_number][month_number]['total_time'][task_id] = tz_time_total
+  # Day
+  try:
+    totals[year_number][month_number][day_number]['total_time'][task_id] += tz_time_total
+  except KeyError:
+    totals[year_number][month_number][day_number]['total_time'][task_id] = tz_time_total
 
-  diary['days'][day_number]['tasks'].append(
-      {
-        'type':'task',
-        'id':task_id,
-        'start_time':tz_start_time,
-        'end_time':tz_end_time,
-        'total_time':tz_time_total
-        }
-      )
-  db.write(diary_path, diary)
+  if totals_obj:
+    return totals
+  else:
+    db.write(totals_path, totals)
+    return
 
 def get_task_stats(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
@@ -375,15 +393,20 @@ def get_task_stats(users, user_id, option=None):
   elif stats_type == 'month':
     timedelta = datetime.timedelta(days=30 * stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'{date.year}-{date.month}-{user_id}'
+    filename = f'task-totals-{user_id}'
     report = f'Month statistics: {date.year}-{date.month}\n--------------------'
-    diary = db.read(os.path.join('data', user_id, filename))
-    if diary:
-      for task_id in diary['tasks_total']:
-        task_time = diary['tasks_total'][task_id]
-        time_total = datetime.timedelta(seconds=task_time)
-        time_total_hours = task_time / 60 / 60
-        report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+    totals = db.read(os.path.join('data', user_id, filename))
+    if totals:
+      try:
+        year = str(date.year)
+        month = str(date.month)
+        for task_id in totals[year][month]['total_time']:
+          task_time = totals[year][month]['total_time'][task_id]
+          time_total = datetime.timedelta(seconds=task_time)
+          time_total_hours = task_time / 60 / 60
+          report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+      except KeyError:
+        report += f'\nNo data for {date.year}-{date.month}'
     else:
       report += f'\nNo data for {date.year}-{date.month}'
     keyboard = [
@@ -400,16 +423,21 @@ def get_task_stats(users, user_id, option=None):
   elif stats_type == 'day':
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'{date.year}-{date.month}-{user_id}'
+    filename = f'task-totals-{user_id}'
     report = f'Day statistics: {date.year}-{date.month}-{date.day}\n--------------------'
-    diary = db.read(os.path.join('data', user_id, filename))
-    day = str(date.day)
-    if diary and day in diary['days'].keys():
-      for task_id in diary['days'][day]['tasks_total']:
-        task_time = diary['days'][day]['tasks_total'][task_id]
-        time_total = datetime.timedelta(seconds=task_time)
-        time_total_hours = task_time / 60 / 60
-        report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+    totals = db.read(os.path.join('data', user_id, filename))
+    if totals:
+      try:
+        year = str(date.year)
+        month = str(date.month)
+        day = str(date.day)
+        for task_id in totals[year][month][day]['total_time']:
+          task_time = totals[year][month][day]['total_time'][task_id]
+          time_total = datetime.timedelta(seconds=task_time)
+          time_total_hours = task_time / 60 / 60
+          report += f'\n{get_task_name(users, user_id, task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+      except KeyError:
+        report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     else:
       report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     keyboard = [

@@ -29,19 +29,6 @@ def get_default_task(name):
       'time_total': 0,
       }
 
-def get_defaul_diary():
-  return {
-      'tasks_total':{},
-      'days':{},
-      }
-
-def get_default_day(timezone):
-  return {
-      'timezone':timezone,
-      'tasks_total':{},
-      'tasks':[],
-      }
-
 def get_default_list_task(task_id, timezone, start_time, end_time):
   return {
       'id': task_id,
