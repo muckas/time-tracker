@@ -53,6 +53,8 @@ def get_name(name):
     'task_stats':'Show task stats',
     'set_timezone':'Set timezone',
     'now':'Now',
+    'show_disabled':'Show disabled tasks',
+    'show_enabled':'Show enabled tasks',
     }
   return names[name]
 

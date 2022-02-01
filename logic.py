@@ -135,6 +135,14 @@ def get_enabled_tasks(users, user_id):
       enabled_tasks.append(task_id)
   return enabled_tasks
 
+def get_disabled_tasks(users, user_id):
+  tasks = users[user_id]['tasks']
+  disabled_tasks = []
+  for task_id in tasks:
+    if not tasks[task_id]['enabled']:
+      disabled_tasks.append(task_id)
+  return disabled_tasks
+
 def get_enabled_tasks_names(users, user_id):
   tasks = users[user_id]['tasks']
   enabled_tasks = []
@@ -142,6 +150,14 @@ def get_enabled_tasks_names(users, user_id):
     if tasks[task_id]['enabled']:
       enabled_tasks.append(tasks[task_id]['name'])
   return enabled_tasks
+
+def get_disabled_tasks_names(users, user_id):
+  tasks = users[user_id]['tasks']
+  disabled_tasks = []
+  for task_id in tasks:
+    if not tasks[task_id]['enabled']:
+      disabled_tasks.append(tasks[task_id]['name'])
+  return disabled_tasks
 
 def get_all_tasks(users, user_id):
   return users[user_id]['tasks'].keys()
@@ -547,8 +563,9 @@ def menu_handler(user_id, text):
 
     task_name = temp_vars[user_id]['task_name']
     task_id = get_task_id(users, user_id, task_name)
-    if task_name not in get_all_tasks_names(users, user_id):
+    if not task_id:
       add_task(users, user_id, task_name, enabled=False)
+      task_id = get_task_id(users, user_id, task_name)
       tgbot.send_message(user_id, f'Added custom task {task_name}')
     users[user_id]['active_task'] = {
         'id': task_id,
@@ -563,11 +580,25 @@ def menu_handler(user_id, text):
 
   # STATE - start_task_time
   if state == 'start_task_time':
-    task_name = text
-    temp_vars[user_id].update({'task_name':task_name})
-    keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
-    tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
-    change_state(users, user_id, 'start_task')
+    if text == constants.get_name('show_disabled'):
+      tasks = get_disabled_tasks_names(users, user_id)
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        keyboard += [constants.get_name('show_enabled')],
+        tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
+      else:
+        tgbot.send_message(user_id, 'No disabled tasks\n/cancel')
+    elif text == constants.get_name('show_enabled'):
+      tasks = get_enabled_tasks_names(users, user_id)
+      keyboard = get_options_keyboard(tasks, columns=3)
+      keyboard += [constants.get_name('show_disabled')],
+      tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
+    else:
+      task_name = text
+      temp_vars[user_id].update({'task_name':task_name})
+      keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+      tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
+      change_state(users, user_id, 'start_task')
 
   if state == 'stop_task':
     time_interval = text
@@ -639,6 +670,7 @@ def menu_handler(user_id, text):
       tasks = get_enabled_tasks_names(users, user_id)
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
+        keyboard += [constants.get_name('show_disabled')],
         tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'start_task_time')
       else:
