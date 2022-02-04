@@ -530,6 +530,44 @@ def get_task_stats(users, user_id, option=None):
   else:
     return 'Wrong query data', None
 
+def get_descriptions_reply_markup(users, user_id, task_id):
+  keyboard = []
+  i = 0
+  for description in users[user_id]['tasks'][task_id]['descriptions']:
+    keyboard += [InlineKeyboardButton(description, callback_data = f'description:{i}')],
+    i += 1
+  keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return reply_markup
+
+def handle_description_query(users, user_id, query):
+  if users[user_id]['active_task']:
+    try:
+      description_number = int(query)
+      task_id = users[user_id]['active_task']['id']
+      description = users[user_id]['tasks'][task_id]['descriptions'][description_number]
+      users[user_id]['active_task']['description'] = description
+      db.write('users', users)
+      return f'Description: {description}', None
+    except ValueError:
+      if query == 'new':
+        tgbot.send_message(user_id, 'Type new description', keyboard=[])
+        change_state(users, user_id, 'new_description')
+      return 'New description', None
+  else:
+    return 'No active task', None
+
+def add_description(users, user_id, description):
+  max_descriptions = 3
+  task_id = users[user_id]['active_task']['id']
+  if description not in users[user_id]['tasks'][task_id]['descriptions']:
+    users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
+    while len(users[user_id]['tasks'][task_id]['descriptions']) > max_descriptions:
+      users[user_id]['tasks'][task_id]['descriptions'].pop(-1)
+  users[user_id]['active_task']['description'] = description
+  db.write('users', users)
+  return f'Current task: {get_task_name(users, user_id, task_id)}\nDescription:{description}'
+
 def convert_interval_to_seconds(text):
   if text[:1] == '-': text = text[1:]
   with suppress(ValueError):
@@ -549,8 +587,15 @@ def menu_handler(user_id, text):
   users = db.read('users')
   state = temp_vars[user_id]['state']
 
+  # STATE - new_description
+  if state == 'new_description':
+    reply = add_description(users, user_id, text)
+    tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
+    change_state(users, user_id, 'main_menu')
+    get_new_timer(user_id)
+
   # STATE - start_task
-  if state == 'start_task':
+  elif state == 'start_task':
     # Retroactive task starting
     if text == constants.get_name('now'):
       start_time = int(time.time())
@@ -575,7 +620,15 @@ def menu_handler(user_id, text):
         'description':''
         }
     db.write('users',users)
-    tgbot.send_message(user_id, f'Started {task_name}', keyboard=get_main_menu(users, user_id))
+    reply_markup = get_descriptions_reply_markup(users, user_id, task_id)
+    tgbot.send_message(user_id,
+        f'Started {task_name}', 
+        keyboard=get_main_menu(users, user_id),
+        )
+    tgbot.send_message(user_id,
+        f'No description', 
+        reply_markup=reply_markup
+        )
     change_state(users, user_id, 'main_menu')
     message = tgbot.send_message(user_id, f'Timer')
     update_timer(user_id, message, start_time, task_name)
