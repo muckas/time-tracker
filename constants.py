@@ -1,5 +1,6 @@
 import time
 import icalendar
+import uuid
 
 def get_temp_vars():
   return {
@@ -29,12 +30,13 @@ def get_default_task(name):
       'time_total': 0,
       }
 
-def get_default_list_task(task_id, timezone, start_time, end_time):
+def get_default_list_task(task_id, description, timezone, start_time, end_time, ):
   return {
       'id': task_id,
       'timezone': timezone,
       'start': start_time,
       'end': end_time,
+      'description': description,
       }
 
 def get_new_calendar(name, timezone):

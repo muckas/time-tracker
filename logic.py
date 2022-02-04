@@ -191,6 +191,7 @@ def stop_task(users, user_id, task_id, time_text):
   task_name = get_task_name(users, user_id, task_id)
   temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None})
   task_start_time = users[user_id]['active_task']['start_time']
+  task_description = users[user_id]['active_task']['description']
   # Retroactive task stopping
   if time_text == constants.get_name('now'):
     task_end_time = int(time.time())
@@ -206,7 +207,7 @@ def stop_task(users, user_id, task_id, time_text):
     else:
       return None
   timezone = users[user_id]['timezone']
-  write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time, timezone)
+  write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone)
   # Writing task total time to users.json
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
@@ -216,10 +217,11 @@ def stop_task(users, user_id, task_id, time_text):
   db.write('users',users)
   return task_duration
 
-def write_task_to_diary(users, user_id, task_id, start_time, end_time, timezone, totals_obj=None):
+def write_task_to_diary(users, user_id, task_id, task_description, start_time, end_time, timezone, totals_obj=None):
   if not totals_obj:
-    write_to_task_list(user_id, task_id, timezone, start_time, end_time)
-    write_to_ical(users, user_id, task_id, start_time, end_time)
+    event_id = str(uuid.uuid4())
+    write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time)
+    write_to_ical(users, user_id, event_id, task_id, task_description, start_time, end_time)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -234,15 +236,15 @@ def write_task_to_diary(users, user_id, task_id, start_time, end_time, timezone,
     update_task_totals(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), totals_obj)
     start_date = temp_end_date + one_second
 
-def write_to_task_list(user_id, task_id, timezone, start_time, end_time):
+def write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time):
   task_list_filename = f'tasks-{user_id}'
   task_list_path = os.path.join('data', user_id, task_list_filename)
   task_list = db.read(task_list_path)
-  if not task_list: task_list = []
-  task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
+  if not task_list: task_list = {}
+  task_list[event_id] = constants.get_default_list_task(task_id, task_description, timezone, start_time, end_time)
   db.write(task_list_path, task_list)
 
-def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
+def write_to_ical(users, user_id, event_id, task_id, task_description, start_time, end_time, ical_obj=None):
   calendar_name = f'tasks-calendar-{user_id}.ics'
   calendar_path = os.path.join('db', 'data', user_id, calendar_name)
   timezone = users[user_id]['timezone']
@@ -268,9 +270,9 @@ def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
   dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
   dtend = datetime.datetime.utcfromtimestamp(end_time + tzoffset_sec)
   event = icalendar.Event()
-  event_id = uuid.uuid4()
   event.add('UID', event_id)
   event.add('summary', summary)
+  event.add('description', task_description)
   event.add('tzoffset', tzoffset_hours)
   event.add('dtstart', dtstart)
   event.add('dtend', dtend)
@@ -569,7 +571,8 @@ def menu_handler(user_id, text):
       tgbot.send_message(user_id, f'Added custom task {task_name}')
     users[user_id]['active_task'] = {
         'id': task_id,
-        'start_time':start_time
+        'start_time':start_time,
+        'description':''
         }
     db.write('users',users)
     tgbot.send_message(user_id, f'Started {task_name}', keyboard=get_main_menu(users, user_id))
