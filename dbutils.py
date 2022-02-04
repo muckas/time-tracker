@@ -74,41 +74,35 @@ def check_users():
   log.info(f'Checked users.json, {missing_total} missing entries created')
   return missing_total
 
-def check_data():
-  log.info('Checking data...')
-  missing_total = 0
-  default_diary = constants.get_defaul_diary()
-  default_day= constants.get_default_day(0)
-  data_dir = os.path.join('db', 'data')
-  for path, subdirs, files in os.walk(data_dir):
-    for name in files:
-      missing_local = 0
-      if name[:5] == 'tasks': # Skip tasks-{user_id}.json
-        pass
+def update_task_lists(dry_run):
+  updated_total = 0
+  log.info('Updating task lists...')
+  users = db.read('users')
+  for user_id in users:
+    updated_local = 0
+    default_event = constants.get_default_list_task(0, users[user_id]['timezone'], 0, 0, '')
+    filename = f'tasks-{user_id}'
+    path = os.path.join('data', user_id, filename)
+    log.info(f'Checking {path}')
+    task_list = db.read(path)
+    new_task_list = {}
+    if task_list:
+      for event in task_list:
+        if 'description' not in event.keys():
+          event['description'] = default_event['description']
+        event_id = str(uuid.uuid4())
+        new_task_list[event_id] = event
+        log.debug(f'Created new event with id {event_id}')
+        updated_total += 1
+        updated_local += 1
+      log.info(f'{updated_local} events created for user {user_id}')
+      if dry_run:
+        log.info(f'--dry-run, not writing changes to "{path}"')
       else:
-        db_name = os.path.join(path, name)[3:-5] # remove "db/" and ".json" from name
-        log.info(f'Checking {db_name}')
-        diary = db.read(db_name)
-        for key in default_diary:
-          if key not in diary.keys():
-            missing_local += 1
-            value = default_diary[key]
-            diary[key] = value
-            log.info(f'Missing key "{key}", adding {key}:{value}')
-        for day in diary['days']:
-          log.info(f'Checking day {day}')
-          for key in default_day:
-            if key not in diary['days'][day].keys():
-              missing_total += 1
-              value = default_day[key]
-              diary['days'][day][key] = value
-              log.info(f'Missing key "{key}", adding {key}:{value}')
-          #diary['days'][day]['history'] check goes here ============================
-        if missing_local > 0: db.write(db_name, diary)
-        missing_total += missing_local
-        missing_local = 0
-    log.info(f'Data check complete, {missing_total} missing entries created')
-  return missing_total
+        db.write(path, new_task_list)
+    else:
+      log.info(f'No task list found for user {user_id}, skipping')
+  log.info(f'Updated task lists, {updated_total} entries created')
 
 def is_uuid4(string):
   try:
@@ -259,13 +253,14 @@ def generate_calendars(force, dry_run):
       timezone = users[user_id]['timezone']
       cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
       events_total = 0
-      task_list = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
-      if task_list:
-        for task in task_list:
-          task_id = str(task['id'])
-          start_time = task['start']
-          end_time = task['end']
-          cal = logic.write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=cal)
+      tasks = db.read(os.path.join('data', user_id, f'tasks-{user_id}'))
+      if tasks:
+        for event_id in tasks:
+          task_id = str(tasks[event_id]['id'])
+          description = tasks[event_id]['description']
+          start_time = tasks[event_id]['start']
+          end_time = tasks[event_id]['end']
+          cal = logic.write_to_ical(users, user_id, event_id, task_id, description, start_time, end_time, ical_obj=cal)
           events_total += 1
           entries_total += 1
         log.info(f'Generated {events_total} events for {calendar_path}')
@@ -317,14 +312,22 @@ def generate_task_totals(force, dry_run):
 class DButils(object):
   """Database utility"""
 
-  def generate_task_totals(self, force=False, dry_run=False):
+  def update_task_lists(self, dry_run=False):
     '''
-    Generate iCalendar files
-    :param force: Force generate if totals already exists
+    Task list update (v0.10.0)
     :param dry_run: Do not write changes
     '''
-    db.archive('generate_task_totals')
-    generate_task_totals(force, dry_run)
+    db.archive('update_task_lists')
+    update_task_lists(dry_run)
+
+  # def generate_task_totals(self, force=False, dry_run=False):
+  #   '''
+  #   Generate task totals
+  #   :param force: Force generate if totals already exists
+  #   :param dry_run: Do not write changes
+  #   '''
+  #   db.archive('generate_task_totals')
+  #   generate_task_totals(force, dry_run)
 
   def generate_calendars(self, force=False, dry_run=False):
     '''
