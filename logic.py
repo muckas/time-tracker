@@ -191,6 +191,7 @@ def stop_task(users, user_id, task_id, time_text):
   task_name = get_task_name(users, user_id, task_id)
   temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None})
   task_start_time = users[user_id]['active_task']['start_time']
+  task_description = users[user_id]['active_task']['description']
   # Retroactive task stopping
   if time_text == constants.get_name('now'):
     task_end_time = int(time.time())
@@ -206,7 +207,7 @@ def stop_task(users, user_id, task_id, time_text):
     else:
       return None
   timezone = users[user_id]['timezone']
-  write_task_to_diary(users, user_id, task_id, task_start_time, task_end_time, timezone)
+  write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone)
   # Writing task total time to users.json
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
@@ -216,10 +217,11 @@ def stop_task(users, user_id, task_id, time_text):
   db.write('users',users)
   return task_duration
 
-def write_task_to_diary(users, user_id, task_id, start_time, end_time, timezone, totals_obj=None):
+def write_task_to_diary(users, user_id, task_id, task_description, start_time, end_time, timezone, totals_obj=None):
   if not totals_obj:
-    write_to_task_list(user_id, task_id, timezone, start_time, end_time)
-    write_to_ical(users, user_id, task_id, start_time, end_time)
+    event_id = str(uuid.uuid4())
+    write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time)
+    write_to_ical(users, user_id, event_id, task_id, task_description, start_time, end_time)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -234,15 +236,15 @@ def write_task_to_diary(users, user_id, task_id, start_time, end_time, timezone,
     update_task_totals(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), totals_obj)
     start_date = temp_end_date + one_second
 
-def write_to_task_list(user_id, task_id, timezone, start_time, end_time):
+def write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time):
   task_list_filename = f'tasks-{user_id}'
   task_list_path = os.path.join('data', user_id, task_list_filename)
   task_list = db.read(task_list_path)
-  if not task_list: task_list = []
-  task_list.append(constants.get_default_list_task(task_id, timezone, start_time, end_time))
+  if not task_list: task_list = {}
+  task_list[event_id] = constants.get_default_list_task(task_id, task_description, timezone, start_time, end_time)
   db.write(task_list_path, task_list)
 
-def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
+def write_to_ical(users, user_id, event_id, task_id, task_description, start_time, end_time, ical_obj=None):
   calendar_name = f'tasks-calendar-{user_id}.ics'
   calendar_path = os.path.join('db', 'data', user_id, calendar_name)
   timezone = users[user_id]['timezone']
@@ -268,9 +270,9 @@ def write_to_ical(users, user_id, task_id, start_time, end_time, ical_obj=None):
   dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
   dtend = datetime.datetime.utcfromtimestamp(end_time + tzoffset_sec)
   event = icalendar.Event()
-  event_id = uuid.uuid4()
   event.add('UID', event_id)
   event.add('summary', summary)
+  event.add('description', task_description)
   event.add('tzoffset', tzoffset_hours)
   event.add('dtstart', dtstart)
   event.add('dtend', dtend)
@@ -528,6 +530,44 @@ def get_task_stats(users, user_id, option=None):
   else:
     return 'Wrong query data', None
 
+def get_descriptions_reply_markup(users, user_id, task_id):
+  keyboard = []
+  i = 0
+  for description in users[user_id]['tasks'][task_id]['descriptions']:
+    keyboard += [InlineKeyboardButton(description, callback_data = f'description:{i}')],
+    i += 1
+  keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return reply_markup
+
+def handle_description_query(users, user_id, query):
+  if users[user_id]['active_task']:
+    try:
+      description_number = int(query)
+      task_id = users[user_id]['active_task']['id']
+      description = users[user_id]['tasks'][task_id]['descriptions'][description_number]
+      users[user_id]['active_task']['description'] = description
+      db.write('users', users)
+      return f'Description: {description}', None
+    except ValueError:
+      if query == 'new':
+        tgbot.send_message(user_id, 'Type new description', keyboard=[])
+        change_state(users, user_id, 'new_description')
+      return 'New description', None
+  else:
+    return 'No active task', None
+
+def add_description(users, user_id, description):
+  max_descriptions = 3
+  task_id = users[user_id]['active_task']['id']
+  if description not in users[user_id]['tasks'][task_id]['descriptions']:
+    users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
+    while len(users[user_id]['tasks'][task_id]['descriptions']) > max_descriptions:
+      users[user_id]['tasks'][task_id]['descriptions'].pop(-1)
+  users[user_id]['active_task']['description'] = description
+  db.write('users', users)
+  return f'Current task: {get_task_name(users, user_id, task_id)}\nDescription:{description}'
+
 def convert_interval_to_seconds(text):
   if text[:1] == '-': text = text[1:]
   with suppress(ValueError):
@@ -547,8 +587,15 @@ def menu_handler(user_id, text):
   users = db.read('users')
   state = temp_vars[user_id]['state']
 
+  # STATE - new_description
+  if state == 'new_description':
+    reply = add_description(users, user_id, text)
+    tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
+    change_state(users, user_id, 'main_menu')
+    get_new_timer(user_id)
+
   # STATE - start_task
-  if state == 'start_task':
+  elif state == 'start_task':
     # Retroactive task starting
     if text == constants.get_name('now'):
       start_time = int(time.time())
@@ -569,10 +616,19 @@ def menu_handler(user_id, text):
       tgbot.send_message(user_id, f'Added custom task {task_name}')
     users[user_id]['active_task'] = {
         'id': task_id,
-        'start_time':start_time
+        'start_time':start_time,
+        'description':''
         }
     db.write('users',users)
-    tgbot.send_message(user_id, f'Started {task_name}', keyboard=get_main_menu(users, user_id))
+    reply_markup = get_descriptions_reply_markup(users, user_id, task_id)
+    tgbot.send_message(user_id,
+        f'Started {task_name}', 
+        keyboard=get_main_menu(users, user_id),
+        )
+    tgbot.send_message(user_id,
+        f'No description', 
+        reply_markup=reply_markup
+        )
     change_state(users, user_id, 'main_menu')
     message = tgbot.send_message(user_id, f'Timer')
     update_timer(user_id, message, start_time, task_name)

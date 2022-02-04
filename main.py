@@ -13,7 +13,7 @@ import traceback
 import tgbot
 import logic
 
-VERSION = '0.9.0'
+VERSION = '0.10.0'
 NAME = 'Time Tracker'
 
 # Logger setup
@@ -69,11 +69,12 @@ def mainloop():
   params = db.read('params')
   update_interval = params['update_interval']
   last_backup = params['last_backup']
+  max_backups = params['max_backups']
   while True:
     # Backup check
     date = datetime.datetime.now().date()
     if str(date) != params['last_backup']:
-      db.archive(filename='time-tracker', max_backups=10)
+      db.archive(filename='time-tracker', max_backups=max_backups)
       params['last_backup'] = str(date)
       db.write('params', params)
     # Timer update
@@ -88,7 +89,7 @@ if __name__ == '__main__':
     whitelist = db.init('whitelist')
     date = datetime.datetime.now().date()
     if str(date) != params['last_backup']:
-      db.archive(filename='time-tracker', max_backups=10)
+      db.archive(filename='time-tracker', max_backups=params['max_backups'])
       params['last_backup'] = str(date)
       db.write('params', params)
     with suppress(FileExistsError):
@@ -109,9 +110,9 @@ if __name__ == '__main__':
     updater = tgbot.start(tg_token)
     mainloop()
   except Exception as e:
+    log.error((traceback.format_exc()))
     log.warning('Stopping updater...')
     updater.stop()
-    log.error((traceback.format_exc()))
     admin_id = db.read('params')['admin']
     if admin_id:
       tg.send_message(admin_id, f'Exception: {e}', disable_notification=True)

@@ -3,6 +3,7 @@
   "use_whitelist": false,
 	"update_interval":60,
 	"last_backup":0,
+	"max_backups":0,
 	"web_path":"https://example.com/",
 	"web_port":8000
 }
