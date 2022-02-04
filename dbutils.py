@@ -80,7 +80,6 @@ def update_task_lists(dry_run):
   users = db.read('users')
   for user_id in users:
     updated_local = 0
-    default_event = constants.get_default_list_task(0, users[user_id]['timezone'], 0, 0, '')
     filename = f'tasks-{user_id}'
     path = os.path.join('data', user_id, filename)
     log.info(f'Checking {path}')
@@ -89,7 +88,7 @@ def update_task_lists(dry_run):
     if task_list:
       for event in task_list:
         if 'description' not in event.keys():
-          event['description'] = default_event['description']
+          event['description'] = ''
         event_id = str(uuid.uuid4())
         new_task_list[event_id] = event
         log.debug(f'Created new event with id {event_id}')
