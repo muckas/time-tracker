@@ -753,7 +753,7 @@ def menu_handler(user_id, text):
       if users[user_id]['active_task']:
         task_id = users[user_id]['active_task']['id']
         descriptions = users[user_id]['tasks'][task_id]['descriptions']
-        tgbot.send_message(user_id, 'Change description', keyboard=get_options_keyboard(descriptions, columns=1))
+        tgbot.send_message(user_id, 'Change description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
         change_state(users, user_id, 'new_description')
       else:
         tgbot.send_message(user_id, 'No active task', keyboard=get_main_menu(users, user_id))
