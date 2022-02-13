@@ -50,6 +50,8 @@ def get_new_calendar(name, timezone):
 def get_name(name):
   names = {
     'disable_menu':'Hide menu',
+    'menu_main':'Main menu',
+    'menu_settings':'Settings',
     'start_task':'Start task',
     'add_task':'Add task',
     'remove_task':'Disable task',
@@ -59,8 +61,7 @@ def get_name(name):
     'now':'Now',
     'show_disabled':'Show disabled tasks',
     'show_enabled':'Show enabled tasks',
-    'menu_main':'Main menu',
-    'menu_settings':'Settings',
+    'change_description': 'Change description',
     }
   return names[name]
 

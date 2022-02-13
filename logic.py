@@ -90,7 +90,7 @@ def get_main_menu(users, user_id):
       start_task_button = constants.get_name('start_task')
     keyboard = [
         [start_task_button],
-        [constants.get_name('add_task'), constants.get_name('remove_task')],
+        [constants.get_name('change_description')],
         [constants.get_name('task_stats'), constants.get_name('menu_settings')],
         ]
     if users[user_id]['timezone'] == None:
@@ -748,6 +748,16 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('set_timezone'):
       tgbot.send_message(user_id, 'Send hour offset for UTC\nValid range (-12...+14)\n/cancel', keyboard=[])
       change_state(users, user_id, 'set_timezone')
+
+    elif button_name == constants.get_name('change_description'):
+      if users[user_id]['active_task']:
+        task_id = users[user_id]['active_task']['id']
+        descriptions = users[user_id]['tasks'][task_id]['descriptions']
+        tgbot.send_message(user_id, 'Change description', keyboard=get_options_keyboard(descriptions, columns=1))
+        change_state(users, user_id, 'new_description')
+      else:
+        tgbot.send_message(user_id, 'No active task', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
 
     elif button_name == constants.get_name('start_task'):
       tasks = get_enabled_tasks_names(users, user_id)
