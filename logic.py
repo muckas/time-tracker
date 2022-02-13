@@ -546,6 +546,8 @@ def handle_description_query(users, user_id, query):
       description_number = int(query)
       task_id = users[user_id]['active_task']['id']
       description = users[user_id]['tasks'][task_id]['descriptions'][description_number]
+      users[user_id]['tasks'][task_id]['descriptions'].remove(description)
+      users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
       users[user_id]['active_task']['description'] = description
       db.write('users', users)
       return f'Description: {description}', None
@@ -560,13 +562,17 @@ def handle_description_query(users, user_id, query):
 def add_description(users, user_id, description):
   max_descriptions = 3
   task_id = users[user_id]['active_task']['id']
-  if description not in users[user_id]['tasks'][task_id]['descriptions']:
+  if description in users[user_id]['tasks'][task_id]['descriptions']:
+    users[user_id]['tasks'][task_id]['descriptions'].remove(description)
+    users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
+    print('hello???')
+  else:
     users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
     while len(users[user_id]['tasks'][task_id]['descriptions']) > max_descriptions:
       users[user_id]['tasks'][task_id]['descriptions'].pop(-1)
   users[user_id]['active_task']['description'] = description
   db.write('users', users)
-  return f'Current task: {get_task_name(users, user_id, task_id)}\nDescription:{description}'
+  return f'Current task: {get_task_name(users, user_id, task_id)}\nDescription: {description}'
 
 def convert_interval_to_seconds(text):
   if text[:1] == '-': text = text[1:]
