@@ -5,6 +5,7 @@ import uuid
 def get_temp_vars():
   return {
       'state':'main_menu',
+      'menu_state':'menu_main',
       'task_name':None,
       'timer_message':None,
       'timer_start':None,
@@ -58,6 +59,8 @@ def get_name(name):
     'now':'Now',
     'show_disabled':'Show disabled tasks',
     'show_enabled':'Show enabled tasks',
+    'menu_main':'Main menu',
+    'menu_settings':'Settings',
     }
   return names[name]
 

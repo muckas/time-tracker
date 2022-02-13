@@ -80,20 +80,28 @@ def get_new_timer(user_id):
     tgbot.send_message(user_id, 'No task is active')
 
 def get_main_menu(users, user_id):
+  menu_state = temp_vars[user_id]['menu_state']
   active_task = users[user_id]['active_task']
-  if active_task:
-    task_name = get_task_name(users, user_id, active_task['id'])
-    start_task_button = f'{constants.get_name("stop")}{task_name}'
-  else:
-    start_task_button = constants.get_name('start_task')
-  keyboard = [
-      [start_task_button],
-      [constants.get_name('add_task'), constants.get_name('remove_task')],
-      [constants.get_name('task_stats'), constants.get_name('set_timezone')],
-      # [constants.get_name('disable_menu')]
-      ]
-  if users[user_id]['timezone'] == None:
-    keyboard[0] = [constants.get_name('set_timezone')]
+  if menu_state == 'menu_main':
+    if active_task:
+      task_name = get_task_name(users, user_id, active_task['id'])
+      start_task_button = f'{constants.get_name("stop")}{task_name}'
+    else:
+      start_task_button = constants.get_name('start_task')
+    keyboard = [
+        [start_task_button],
+        [constants.get_name('add_task'), constants.get_name('remove_task')],
+        [constants.get_name('task_stats'), constants.get_name('menu_settings')],
+        ]
+    if users[user_id]['timezone'] == None:
+      keyboard[0] = [constants.get_name('set_timezone')]
+
+  elif menu_state == 'menu_settings':
+    keyboard = [
+        [constants.get_name('disable_menu')],
+        [constants.get_name('add_task'), constants.get_name('remove_task')],
+        [constants.get_name('menu_main'), constants.get_name('set_timezone')],
+        ]
   return keyboard
 
 def get_options_keyboard(options, columns=2):
@@ -117,6 +125,11 @@ def change_state(users, user_id, new_state):
   temp_vars[user_id]['state'] = new_state
   username = users[user_id]['username']
   log.debug(f'New state "{new_state}" for user @{username}({user_id})')
+
+def change_menu_state(users, user_id, new_state):
+  temp_vars[user_id]['menu_state'] = new_state
+  username = users[user_id]['username']
+  log.debug(f'New menu state "{new_state}" for user @{username}({user_id})')
 
 def get_task_id(users, user_id, task_name):
   for task_id in users[user_id]['tasks']:
@@ -723,6 +736,14 @@ def menu_handler(user_id, text):
 
     if button_name == constants.get_name('disable_menu'):
       disable_menu(user_id)
+
+    elif button_name == constants.get_name('menu_main'):
+      change_menu_state(users, user_id, 'menu_main')
+      tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_settings'):
+      change_menu_state(users, user_id, 'menu_settings')
+      tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
 
     elif button_name == constants.get_name('set_timezone'):
       tgbot.send_message(user_id, 'Send hour offset for UTC\nValid range (-12...+14)\n/cancel', keyboard=[])
