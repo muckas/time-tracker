@@ -80,20 +80,28 @@ def get_new_timer(user_id):
     tgbot.send_message(user_id, 'No task is active')
 
 def get_main_menu(users, user_id):
+  menu_state = temp_vars[user_id]['menu_state']
   active_task = users[user_id]['active_task']
-  if active_task:
-    task_name = get_task_name(users, user_id, active_task['id'])
-    start_task_button = f'{constants.get_name("stop")}{task_name}'
-  else:
-    start_task_button = constants.get_name('start_task')
-  keyboard = [
-      [start_task_button],
-      [constants.get_name('add_task'), constants.get_name('remove_task')],
-      [constants.get_name('task_stats'), constants.get_name('set_timezone')],
-      # [constants.get_name('disable_menu')]
-      ]
-  if users[user_id]['timezone'] == None:
-    keyboard[0] = [constants.get_name('set_timezone')]
+  if menu_state == 'menu_main':
+    if active_task:
+      task_name = get_task_name(users, user_id, active_task['id'])
+      start_task_button = f'{constants.get_name("stop")}{task_name}'
+    else:
+      start_task_button = constants.get_name('start_task')
+    keyboard = [
+        [start_task_button],
+        [constants.get_name('change_description')],
+        [constants.get_name('task_stats'), constants.get_name('menu_settings')],
+        ]
+    if users[user_id]['timezone'] == None:
+      keyboard[0] = [constants.get_name('set_timezone')]
+
+  elif menu_state == 'menu_settings':
+    keyboard = [
+        [constants.get_name('set_timezone')],
+        [constants.get_name('add_task'), constants.get_name('enable_task'), constants.get_name('remove_task')],
+        [constants.get_name('menu_main'), constants.get_name('disable_menu')],
+        ]
   return keyboard
 
 def get_options_keyboard(options, columns=2):
@@ -117,6 +125,11 @@ def change_state(users, user_id, new_state):
   temp_vars[user_id]['state'] = new_state
   username = users[user_id]['username']
   log.debug(f'New state "{new_state}" for user @{username}({user_id})')
+
+def change_menu_state(users, user_id, new_state):
+  temp_vars[user_id]['menu_state'] = new_state
+  username = users[user_id]['username']
+  log.debug(f'New menu state "{new_state}" for user @{username}({user_id})')
 
 def get_task_id(users, user_id, task_name):
   for task_id in users[user_id]['tasks']:
@@ -546,12 +559,14 @@ def handle_description_query(users, user_id, query):
       description_number = int(query)
       task_id = users[user_id]['active_task']['id']
       description = users[user_id]['tasks'][task_id]['descriptions'][description_number]
+      users[user_id]['tasks'][task_id]['descriptions'].remove(description)
+      users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
       users[user_id]['active_task']['description'] = description
       db.write('users', users)
       return f'Description: {description}', None
     except ValueError:
       if query == 'new':
-        tgbot.send_message(user_id, 'Type new description', keyboard=[])
+        tgbot.send_message(user_id, 'Type new description\n/cancel', keyboard=[])
         change_state(users, user_id, 'new_description')
       return 'New description', None
   else:
@@ -560,13 +575,17 @@ def handle_description_query(users, user_id, query):
 def add_description(users, user_id, description):
   max_descriptions = 3
   task_id = users[user_id]['active_task']['id']
-  if description not in users[user_id]['tasks'][task_id]['descriptions']:
+  if description in users[user_id]['tasks'][task_id]['descriptions']:
+    users[user_id]['tasks'][task_id]['descriptions'].remove(description)
+    users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
+    print('hello???')
+  else:
     users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
     while len(users[user_id]['tasks'][task_id]['descriptions']) > max_descriptions:
       users[user_id]['tasks'][task_id]['descriptions'].pop(-1)
   users[user_id]['active_task']['description'] = description
   db.write('users', users)
-  return f'Current task: {get_task_name(users, user_id, task_id)}\nDescription:{description}'
+  return f'Current task: {get_task_name(users, user_id, task_id)}\nDescription: {description}'
 
 def convert_interval_to_seconds(text):
   if text[:1] == '-': text = text[1:]
@@ -652,7 +671,7 @@ def menu_handler(user_id, text):
     else:
       task_name = text
       temp_vars[user_id].update({'task_name':task_name})
-      keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+      keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
       tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
       change_state(users, user_id, 'start_task')
 
@@ -718,9 +737,27 @@ def menu_handler(user_id, text):
     if button_name == constants.get_name('disable_menu'):
       disable_menu(user_id)
 
+    elif button_name == constants.get_name('menu_main'):
+      change_menu_state(users, user_id, 'menu_main')
+      tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_settings'):
+      change_menu_state(users, user_id, 'menu_settings')
+      tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
+
     elif button_name == constants.get_name('set_timezone'):
       tgbot.send_message(user_id, 'Send hour offset for UTC\nValid range (-12...+14)\n/cancel', keyboard=[])
       change_state(users, user_id, 'set_timezone')
+
+    elif button_name == constants.get_name('change_description'):
+      if users[user_id]['active_task']:
+        task_id = users[user_id]['active_task']['id']
+        descriptions = users[user_id]['tasks'][task_id]['descriptions']
+        tgbot.send_message(user_id, 'Change description', keyboard=get_options_keyboard(descriptions, columns=1))
+        change_state(users, user_id, 'new_description')
+      else:
+        tgbot.send_message(user_id, 'No active task', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
 
     elif button_name == constants.get_name('start_task'):
       tasks = get_enabled_tasks_names(users, user_id)
@@ -740,10 +777,19 @@ def menu_handler(user_id, text):
       tasks = get_enabled_tasks_names(users, user_id)
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
-        tgbot.send_message(user_id, 'Choose a task to remove\n/cancel', keyboard=keyboard)
+        tgbot.send_message(user_id, 'Choose a task to disable\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'remove_task')
       else:
-        tgbot.send_message(user_id, "You don't have any tasks")
+        tgbot.send_message(user_id, "No enabled tasks")
+
+    elif button_name == constants.get_name('enable_task'):
+      tasks = get_disabled_tasks_names(users, user_id)
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        tgbot.send_message(user_id, 'Choose a task to enable\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'add_task')
+      else:
+        tgbot.send_message(user_id, "No disabled tasks")
 
     elif button_name == constants.get_name('task_stats'):
       temp_vars[user_id]['stats_delta'] = 0
@@ -757,7 +803,7 @@ def menu_handler(user_id, text):
       if button_name[:stop_string_len] == stop_string: # stop_task
         task_id = users[user_id]['active_task']['id']
         task_name = get_task_name(users, user_id, task_id)
-        keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+        keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
         tgbot.send_message(user_id, f'When to stop {task_name}?\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
       else:
