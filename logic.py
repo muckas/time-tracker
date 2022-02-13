@@ -553,7 +553,7 @@ def handle_description_query(users, user_id, query):
       return f'Description: {description}', None
     except ValueError:
       if query == 'new':
-        tgbot.send_message(user_id, 'Type new description', keyboard=[])
+        tgbot.send_message(user_id, 'Type new description\n/cancel', keyboard=[])
         change_state(users, user_id, 'new_description')
       return 'New description', None
   else:
