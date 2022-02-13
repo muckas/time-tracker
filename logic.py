@@ -652,7 +652,7 @@ def menu_handler(user_id, text):
     else:
       task_name = text
       temp_vars[user_id].update({'task_name':task_name})
-      keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+      keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
       tgbot.send_message(user_id, f'When to start {task_name}?\n/cancel', keyboard=keyboard)
       change_state(users, user_id, 'start_task')
 
@@ -757,7 +757,7 @@ def menu_handler(user_id, text):
       if button_name[:stop_string_len] == stop_string: # stop_task
         task_id = users[user_id]['active_task']['id']
         task_name = get_task_name(users, user_id, task_id)
-        keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=3)
+        keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
         tgbot.send_message(user_id, f'When to stop {task_name}?\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
       else:
