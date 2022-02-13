@@ -98,9 +98,9 @@ def get_main_menu(users, user_id):
 
   elif menu_state == 'menu_settings':
     keyboard = [
-        [constants.get_name('disable_menu')],
-        [constants.get_name('add_task'), constants.get_name('remove_task')],
-        [constants.get_name('menu_main'), constants.get_name('set_timezone')],
+        [constants.get_name('set_timezone')],
+        [constants.get_name('add_task'), constants.get_name('enable_task'), constants.get_name('remove_task')],
+        [constants.get_name('menu_main'), constants.get_name('disable_menu')],
         ]
   return keyboard
 
@@ -777,10 +777,19 @@ def menu_handler(user_id, text):
       tasks = get_enabled_tasks_names(users, user_id)
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
-        tgbot.send_message(user_id, 'Choose a task to remove\n/cancel', keyboard=keyboard)
+        tgbot.send_message(user_id, 'Choose a task to disable\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'remove_task')
       else:
-        tgbot.send_message(user_id, "You don't have any tasks")
+        tgbot.send_message(user_id, "No enabled tasks")
+
+    elif button_name == constants.get_name('enable_task'):
+      tasks = get_disabled_tasks_names(users, user_id)
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        tgbot.send_message(user_id, 'Choose a task to enable\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'add_task')
+      else:
+        tgbot.send_message(user_id, "No disabled tasks")
 
     elif button_name == constants.get_name('task_stats'):
       temp_vars[user_id]['stats_delta'] = 0

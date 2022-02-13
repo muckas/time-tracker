@@ -55,6 +55,7 @@ def get_name(name):
     'start_task':'Start task',
     'add_task':'Add task',
     'remove_task':'Disable task',
+    'enable_task':'Enable task',
     'stop':'Stop ',
     'task_stats':'Show task stats',
     'set_timezone':'Set timezone',
