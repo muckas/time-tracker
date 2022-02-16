@@ -12,7 +12,7 @@ def archive(filename='backup', folder='backup', max_backups=0):
   with suppress(FileExistsError):
     os.makedirs(folder)
     log.info(f'Created {folder} folder')
-  date = datetime.datetime.now().date()
+  date = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
   path = os.path.join(folder, f'{filename}-{date}')
   shutil.make_archive(base_name=path, format='zip', base_dir='db', logger=log)
   log.info(f'Backup complete: {path}')

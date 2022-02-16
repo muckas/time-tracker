@@ -259,7 +259,7 @@ def generate_calendars(force, dry_run):
           description = tasks[event_id]['description']
           start_time = tasks[event_id]['start']
           end_time = tasks[event_id]['end']
-          cal = logic.write_to_ical(users, user_id, event_id, task_id, description, start_time, end_time, ical_obj=cal)
+          cal = logic.write_to_task_ical(users, user_id, event_id, task_id, description, start_time, end_time, ical_obj=cal)
           events_total += 1
           entries_total += 1
         log.info(f'Generated {events_total} events for {calendar_path}')
@@ -374,7 +374,7 @@ class DButils(object):
     date = datetime.datetime.now()
     log.info('---------------------------')
     log.info(f'Database check started on {date}')
-    db.archive(filename='update')
+    db.archive(filename='chkdb')
     missing_total += check_params()
     missing_total += check_users()
     # missing_total += check_data() # DATA removed in v0.9.0
