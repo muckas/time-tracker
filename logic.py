@@ -52,10 +52,10 @@ def generate_new_key(users, user_id, string):
   log.debug(f'Generated new key for user {user_id}')
   send_links(users, user_id)
 
-def update_timer(user_id, message, start_time, task_name):
+def update_timer(user_id, message, start_time, task_name, task_description):
   timer = int(time.time()) - start_time
   timer = datetime.timedelta(seconds=timer)
-  text = f'{task_name}\n{timer}'
+  text = f'{task_name}\nDescription: {task_description}\n{timer}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
@@ -65,17 +65,24 @@ def update_all_timers():
     message = temp_vars[user_id]['timer_message']
     start_time = temp_vars[user_id]['timer_start']
     task_name = temp_vars[user_id]['task_name']
+    task_description = temp_vars[user_id]['task_description']
     if message and start_time and task_name:
-      update_timer(user_id, message, start_time, task_name)
+      update_timer(user_id, message, start_time, task_name, task_description)
 
 def get_new_timer(user_id):
   users = db.read('users')
   if users[user_id]['active_task']:
     message = tgbot.send_message(user_id, 'Timer')
     task_name = get_name(users, user_id, 'task', users[user_id]['active_task']['id'])
+    task_description = users[user_id]['active_task']['description']
     start_time = users[user_id]['active_task']['start_time']
-    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time, 'task_name':task_name})
-    update_timer(user_id, message, start_time, task_name)
+    temp_vars[user_id].update({
+      'timer_message':message,
+      'timer_start':start_time,
+      'task_name':task_name,
+      'task_description':task_description
+      })
+    update_timer(user_id, message, start_time, task_name, task_description)
   else:
     tgbot.send_message(user_id, 'No task is active')
 
@@ -244,7 +251,7 @@ def add_task(users, user_id, task_name, enabled=True):
 
 def stop_task(users, user_id, task_id, time_text):
   task_name = get_name(users, user_id, 'task', task_id)
-  temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None})
+  temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None, 'task_description':None})
   task_start_time = users[user_id]['active_task']['start_time']
   task_description = users[user_id]['active_task']['description']
   # Retroactive task stopping
@@ -620,12 +627,12 @@ def add_description(users, user_id, description):
   if description in users[user_id]['tasks'][task_id]['descriptions']:
     users[user_id]['tasks'][task_id]['descriptions'].remove(description)
     users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
-    print('hello???')
   else:
     users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
     while len(users[user_id]['tasks'][task_id]['descriptions']) > max_descriptions:
       users[user_id]['tasks'][task_id]['descriptions'].pop(-1)
   users[user_id]['active_task']['description'] = description
+  temp_vars[user_id]['task_description'] = description
   db.write('users', users)
   return f'Current task: {get_name(users, user_id, "task", task_id)}\nDescription: {description}'
 
@@ -692,7 +699,7 @@ def menu_handler(user_id, text):
         )
     change_state(users, user_id, 'main_menu')
     message = tgbot.send_message(user_id, f'Timer')
-    update_timer(user_id, message, start_time, task_name)
+    update_timer(user_id, message, start_time, task_name, None)
     temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time})
 
   # STATE - start_task_time

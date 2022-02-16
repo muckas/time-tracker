@@ -7,6 +7,7 @@ def get_temp_vars():
       'state':'main_menu',
       'menu_state':'menu_main',
       'task_name':None,
+      'task_description':None,
       'timer_message':None,
       'timer_start':None,
       'stats_delta':0,
