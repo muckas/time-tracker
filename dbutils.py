@@ -374,7 +374,7 @@ class DButils(object):
     date = datetime.datetime.now()
     log.info('---------------------------')
     log.info(f'Database check started on {date}')
-    db.archive(filename='update')
+    db.archive(filename='chkdb')
     missing_total += check_params()
     missing_total += check_users()
     # missing_total += check_data() # DATA removed in v0.9.0
