@@ -30,6 +30,16 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
         with open(file_path, 'rb') as file:
           self.wfile.write(bytes(file.read()))
         return
+    elif url_path[-1] == 'places.ics':
+      user_id = get_user_by_web_key(url_path[-2])
+      if user_id:
+        file_path = os.path.join('db', 'data', user_id, f'places-calendar-{user_id}.ics')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/octet-stream')
+        self.end_headers()
+        with open(file_path, 'rb') as file:
+          self.wfile.write(bytes(file.read()))
+        return
     html = 'Incorrect request, use /link to get valid links'
     self.wfile.write(bytes(html, 'utf8'))
     return
