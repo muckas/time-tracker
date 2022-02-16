@@ -18,9 +18,11 @@ def get_default_user(tg_username):
       'timezone':None,
       'last_task_end_time':int(time.time()),
       'active_task':{},
-      'tasks':{},
+      'active_place':{},
       'stats_type':'detailed',
       'web_key':None,
+      'tasks':{},
+      'places':{},
       }
 
 def get_default_task(name):
@@ -51,6 +53,7 @@ def get_name(name):
   names = {
     'disable_menu':'Hide menu',
     'menu_main':'Main menu',
+    'menu_edit':'Editing menu',
     'menu_settings':'Settings',
     'start_task':'Start task',
     'add_task':'Add task',
@@ -63,6 +66,10 @@ def get_name(name):
     'show_disabled':'Show disabled tasks',
     'show_enabled':'Show enabled tasks',
     'change_description': 'Change description',
+    'change_place':'Place: ',
+    'add_place':'Add place',
+    'disable_place':'Disable place',
+    'enable_place':'Enable place',
     }
   return names[name]
 
