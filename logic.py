@@ -55,7 +55,11 @@ def generate_new_key(users, user_id, string):
 def update_timer(user_id, message, start_time, task_name, task_description):
   timer = int(time.time()) - start_time
   timer = datetime.timedelta(seconds=timer)
-  text = f'{task_name}\nDescription: {task_description}\n{timer}'
+  if task_description:
+    description = f'Description: {task_description}'
+  else:
+    description = f'No description'
+  text = f'{task_name}\n{description}\n{timer}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
@@ -69,7 +73,7 @@ def update_all_timers():
     if message and start_time and task_name:
       update_timer(user_id, message, start_time, task_name, task_description)
 
-def get_new_timer(user_id):
+def get_new_timer(user_id, notify=True):
   users = db.read('users')
   if users[user_id]['active_task']:
     message = tgbot.send_message(user_id, 'Timer')
@@ -83,7 +87,7 @@ def get_new_timer(user_id):
       'task_description':task_description
       })
     update_timer(user_id, message, start_time, task_name, task_description)
-  else:
+  elif notify:
     tgbot.send_message(user_id, 'No task is active')
 
 def get_main_menu(users, user_id):
@@ -612,6 +616,7 @@ def handle_description_query(users, user_id, query):
       users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
       users[user_id]['active_task']['description'] = description
       db.write('users', users)
+      temp_vars[user_id]['task_description'] = description
       return f'Description: {description}', None
     except ValueError:
       if query == 'new':
@@ -699,7 +704,7 @@ def menu_handler(user_id, text):
         )
     change_state(users, user_id, 'main_menu')
     message = tgbot.send_message(user_id, f'Timer')
-    update_timer(user_id, message, start_time, task_name, None)
+    update_timer(user_id, message, start_time, task_name, '')
     temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time})
 
   # STATE - start_task_time

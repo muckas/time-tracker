@@ -70,6 +70,10 @@ def mainloop():
   update_interval = params['update_interval']
   last_backup = params['last_backup']
   max_backups = params['max_backups']
+  users = db.read('users')
+  for user_id in users: # Creating new timers
+    logic.check_temp_vars(user_id)
+    logic.get_new_timer(user_id, notify=False)
   while True:
     # Backup check
     date = datetime.datetime.now().date()
