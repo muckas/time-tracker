@@ -54,6 +54,7 @@ def check_users():
   users = db.read('users')
   default_user = constants.get_default_user('::corrupted::')
   default_task = constants.get_default_task('::corrupted::')
+  default_place= constants.get_default_place('::corrupted::')
   for user in users:
     log.info(f'Checking user {user}')
     for key in default_user:
@@ -69,6 +70,14 @@ def check_users():
           missing_total += 1
           value = default_task[key]
           users[user]['tasks'][task][key] = value
+          log.info(f'Missing key "{key}", adding {key}:{value}')
+    for place in users[user]['places']:
+      log.info(f'Checking place {place}')
+      for key in default_place:
+        if key not in users[user]['places'][place].keys():
+          missing_total += 1
+          value = default_place[key]
+          users[user]['places'][place][key] = value
           log.info(f'Missing key "{key}", adding {key}:{value}')
   if missing_total > 0: db.write('users', users)
   log.info(f'Checked users.json, {missing_total} missing entries created')
