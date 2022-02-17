@@ -62,7 +62,7 @@ def update_timer(user_id, message, start_time, task_name, task_description):
     description = f'Description: {task_description}'
   else:
     description = f'No description'
-  text = f'{task_name}\n{description}\n{timer}'
+  text = f'{timer}\n{task_name}\n{description}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
@@ -112,25 +112,53 @@ def get_main_menu(users, user_id):
       change_place_button = constants.get_name('change_place') + 'None'
     keyboard = [
         task_line,
-        [change_place_button],
-        [constants.get_name('task_stats'), constants.get_name('menu_edit'), constants.get_name('menu_settings')],
-        ]
+        [
+          change_place_button
+        ],
+        [
+          constants.get_name('task_stats'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings')
+        ],
+      ]
     if users[user_id]['timezone'] == None:
       keyboard[0] = [constants.get_name('set_timezone')]
 
   elif menu_state == 'menu_settings':
     keyboard = [
         [constants.get_name('set_timezone')],
-        [constants.get_name('add_task'), constants.get_name('enable_task'), constants.get_name('remove_task')],
-        [constants.get_name('menu_main'), constants.get_name('menu_edit'), constants.get_name('disable_menu')],
-        ]
+        [
+          constants.get_name('add_tag'),
+          constants.get_name('enable_tag'),
+          constants.get_name('disable_tag'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('disable_menu'),
+        ],
+      ]
 
   elif menu_state == 'menu_edit':
     keyboard = [
-        [constants.get_name('add_task'), constants.get_name('enable_task'), constants.get_name('remove_task')],
-        [constants.get_name('add_place'), constants.get_name('enable_place'), constants.get_name('disable_place')],
-        [constants.get_name('menu_main'), constants.get_name('menu_edit'), constants.get_name('menu_settings')],
-        ]
+        [
+          constants.get_name('add_task'),
+          constants.get_name('enable_task'),
+          constants.get_name('remove_task'),
+          constants.get_name('task_tags'),
+        ],
+        [
+          constants.get_name('add_place'),
+          constants.get_name('enable_place'),
+          constants.get_name('disable_place'),
+          constants.get_name('place_tags'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
   return keyboard
 
 def get_options_keyboard(options, columns=2):
@@ -145,7 +173,7 @@ def get_options_keyboard(options, columns=2):
 
 def enable_menu(users, user_id):
   change_state(users, user_id, 'main_menu')
-  tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
+  tgbot.send_message(user_id, 'Menu enabled', keyboard=get_main_menu(users, user_id))
 
 def disable_menu(user_id):
   tgbot.send_message(user_id, 'Menu disabled', keyboard=[])
@@ -161,26 +189,30 @@ def change_menu_state(users, user_id, new_state):
   log.debug(f'New menu state "{new_state}" for user @{username}({user_id})')
 
 def get_id(users, user_id, info_type, info_name):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   for entry_id in entry_list:
     if entry_list[entry_id]['name'] == info_name:
       return entry_id
   return None
 
 def get_name(users, user_id, info_type, info_id):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   return entry_list[info_id]['name']
 
 def get_enabled(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   enabled_entries = []
   for entry_id in entry_list:
@@ -189,9 +221,9 @@ def get_enabled(users, user_id, info_type):
   return enabled_entries
 
 def get_disabled(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   disabled_entries = []
   for entry_id in entry_list:
@@ -200,9 +232,9 @@ def get_disabled(users, user_id, info_type):
   return disabled_entries
 
 def get_enabled_names(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   enabled_entries = []
   for entry_id in entry_list:
@@ -211,9 +243,9 @@ def get_enabled_names(users, user_id, info_type):
   return enabled_entries
 
 def get_disabled_names(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   disabled_entries = []
   for entry_id in entry_list:
@@ -222,21 +254,71 @@ def get_disabled_names(users, user_id, info_type):
   return disabled_entries
 
 def get_all(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   return entry_list.keys()
 
 def get_all_names(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   all_entries = []
   for entry_id in entry_list:
     all_entries.append(entry_list[entry_id]['name'])
   return all_entries
+
+def get_entry_tags(users, user_id, entry_id):
+  if entry_id in users[user_id]['tasks'].keys():
+    return users[user_id]['tasks'][entry_id]['tags']
+  elif entry_id in users[user_id]['places'].keys():
+    return users[user_id]['places'][entry_id]['tags']
+  else:
+    return None
+
+def get_entry_tags_names(users, user_id, entry_id):
+  tags_list = get_entry_tags(users, user_id, entry_id)
+  tags_names = []
+  for tag_id in tags_list:
+    tags_names.append(get_tag_name(users, user_id, tag_id))
+  return tags_names
+
+def get_all_tags(users, user_id, enabled_only=False, disabled_only=False):
+  tags_list = users[user_id]['tags']
+  if enabled_only:
+    for tag_id in tags_list.copy():
+      if tags_list[tag_id]['enabled'] == False:
+        tags_list.pop(tag_id)
+  elif disabled_only:
+    for tag_id in tags_list.copy():
+      if tags_list[tag_id]['enabled'] == True:
+        tags_list.pop(tag_id)
+  return tags_list
+
+def get_all_tags_names(users, user_id, enabled_only=False, disabled_only=False):
+  tags_list = get_all_tags(users, user_id, enabled_only, disabled_only)
+  names_list = []
+  for tag_id in tags_list:
+    names_list.append(tags_list[tag_id]['name'])
+  return names_list
+
+def get_tag_name(users, user_id, tag_id):
+  tags_list = users[user_id]['tags']
+  if tag_id in tags_list.keys():
+    return tags_list[tag_id]['name']
+
+def get_tag_id(users, user_id, name):
+  tags_list = users[user_id]['tags']
+  for tag_id in tags_list:
+    if tags_list[tag_id]['name'] == name:
+      return tag_id
+  return None
 
 def add_task(users, user_id, task_name, enabled=True):
   if task_name in get_all_names(users, user_id, 'task'):
@@ -556,12 +638,37 @@ def update_place_totals(users, user_id, place_id, tz_start_time, tz_end_time, to
     db.write(totals_path, totals)
     return
 
-def get_task_stats(users, user_id, option=None):
+def add_tag(users, user_id, tag_name, enabled=True):
+  if tag_name in get_all_tags_names(users, user_id):
+    tag_id = get_tag_id(users, user_id, tag_name)
+    if users[user_id]['tags'][tag_id]['enabled']:
+      return None
+    else:
+      users[user_id]['tags'][tag_id]['enabled'] = True
+      db.write('users', users)
+      return f'Enabled tag "{tag_name}"'
+  else: # adding tag to db
+    new_tag_id = str(uuid.uuid4())
+    users[user_id]['tags'].update(
+        {new_tag_id:constants.get_default_tag(tag_name)}
+        )
+    users[user_id]['tags'][new_tag_id]['enabled'] = enabled
+    db.write('users', users)
+    return f'Added tag "{tag_name}"'
+
+def get_stats(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
+  stats_info = temp_vars[user_id]['stats_info']
   stats_type = users[user_id]['stats_type']
   timezone = users[user_id]['timezone']
   tzdelta = datetime.timezone(datetime.timedelta(hours=timezone))
-  if option == 'alltime':
+  if option == 'tasks':
+    stats_info = 'tasks'
+    temp_vars[user_id]['stats_info'] = stats_info
+  elif option == 'places':
+    stats_info = 'places'
+    temp_vars[user_id]['stats_info'] = stats_info
+  elif option == 'alltime':
     stats_type = 'alltime'
     stats_delta = 0
     temp_vars[user_id]['stats_delta'] = 0
@@ -598,18 +705,24 @@ def get_task_stats(users, user_id, option=None):
     stats_delta -= 1
     temp_vars[user_id]['stats_delta'] = stats_delta
 
+  if stats_info == 'tasks':
+    stats_info_button = [InlineKeyboardButton('Place stats', callback_data='task_stats:places')]
+  elif stats_info == 'places':
+    stats_info_button = [InlineKeyboardButton('Task stats', callback_data='task_stats:tasks')]
+
   if stats_type == 'detailed':
-    tasks = get_all(users, user_id, 'task')
+    entries = get_all(users, user_id, stats_info)
+    entry_list = users[user_id][stats_info]
     report = 'Detailed statistics:\n--------------------'
-    for task_id in tasks:
-      task_info = users[user_id]['tasks'][task_id]
-      date_added = timezoned(users, user_id, task_info['date_added'])
+    for entry_id in entries:
+      entry_info = entry_list[entry_id]
+      date_added = timezoned(users, user_id, entry_info['date_added'])
       date_added = datetime.datetime.utcfromtimestamp(date_added)
-      time_total = datetime.timedelta(seconds=task_info['time_total'])
-      time_total_hours = task_info['time_total'] / 60 / 60
-      task_status = ''
-      if not task_info['enabled']: task_status = '(disabled)'
-      report += f'''\n{get_name(users, user_id, 'task', task_id)}{task_status}
+      time_total = datetime.timedelta(seconds=entry_info['time_total'])
+      time_total_hours = entry_info['time_total'] / 60 / 60
+      entry_status = ''
+      if not entry_info['enabled']: entry_status = ' (disabled)'
+      report += f'''\n{get_name(users, user_id, stats_info, entry_id)}{entry_status}
       Creation date: {date_added}
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
@@ -619,18 +732,20 @@ def get_task_stats(users, user_id, option=None):
         InlineKeyboardButton('Year', callback_data='task_stats:year')
         ],
         [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
-        ]
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'alltime':
-    tasks = get_enabled(users, user_id, 'task')
+    entries = get_enabled(users, user_id, stats_info)
+    entry_list = users[user_id][stats_info]
     report = 'All time statistics:\n--------------------'
-    for task_id in tasks:
-      task_info = users[user_id]['tasks'][task_id]
-      time_total = datetime.timedelta(seconds=task_info['time_total'])
-      time_total_hours = task_info['time_total'] / 60 / 60
-      report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+    for entry_id in entries:
+      entry_info = entry_list[entry_id]
+      time_total = datetime.timedelta(seconds=entry_info['time_total'])
+      time_total_hours = entry_info['time_total'] / 60 / 60
+      report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     keyboard = [
         [
         InlineKeyboardButton('Day', callback_data='task_stats:day'),
@@ -638,28 +753,29 @@ def get_task_stats(users, user_id, option=None):
         InlineKeyboardButton('Year', callback_data='task_stats:year')
         ],
         [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        stats_info_button,
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'year':
-    timedelta = datetime.timedelta(days=30 * stats_delta)
+    timedelta = datetime.timedelta(days=365 * stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'task-totals-{user_id}'
+    filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Year statistics: {date.year}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
       try:
         year = str(date.year)
-        for task_id in totals[year]['total_time']:
-          task_time = totals[year]['total_time'][task_id]
-          time_total = datetime.timedelta(seconds=task_time)
-          time_total_hours = task_time / 60 / 60
-          report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        for entry_id in totals[year]['total_time']:
+          entry_time = totals[year]['total_time'][entry_id]
+          time_total = datetime.timedelta(seconds=entry_time)
+          time_total_hours = entry_time / 60 / 60
+          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
       except KeyError:
-        report += f'\nNo data for {date.year}-{date.month}'
+        report += f'\nNo data for {date.year}'
     else:
-      report += f'\nNo data for {date.year}-{date.month}'
+      report += f'\nNo data for {date.year}'
     keyboard = [
         [
           InlineKeyboardButton('Day', callback_data='task_stats:day'),
@@ -672,26 +788,27 @@ def get_task_stats(users, user_id, option=None):
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
-          ]
-        ]
+        ],
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'month':
     timedelta = datetime.timedelta(days=30 * stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'task-totals-{user_id}'
+    filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Month statistics: {date.year}-{date.month}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
       try:
         year = str(date.year)
         month = str(date.month)
-        for task_id in totals[year][month]['total_time']:
-          task_time = totals[year][month]['total_time'][task_id]
-          time_total = datetime.timedelta(seconds=task_time)
-          time_total_hours = task_time / 60 / 60
-          report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        for entry_id in totals[year][month]['total_time']:
+          entry_time = totals[year][month]['total_time'][entry_id]
+          time_total = datetime.timedelta(seconds=entry_time)
+          time_total_hours = entry_time / 60 / 60
+          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
       except KeyError:
         report += f'\nNo data for {date.year}-{date.month}'
     else:
@@ -708,15 +825,16 @@ def get_task_stats(users, user_id, option=None):
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
-          ]
-        ]
+        ],
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'day':
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'task-totals-{user_id}'
+    filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Day statistics: {date.year}-{date.month}-{date.day}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
@@ -724,11 +842,11 @@ def get_task_stats(users, user_id, option=None):
         year = str(date.year)
         month = str(date.month)
         day = str(date.day)
-        for task_id in totals[year][month][day]['total_time']:
-          task_time = totals[year][month][day]['total_time'][task_id]
-          time_total = datetime.timedelta(seconds=task_time)
-          time_total_hours = task_time / 60 / 60
-          report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        for entry_id in totals[year][month][day]['total_time']:
+          entry_time = totals[year][month][day]['total_time'][entry_id]
+          time_total = datetime.timedelta(seconds=entry_time)
+          time_total_hours = entry_time / 60 / 60
+          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
       except KeyError:
         report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     else:
@@ -745,8 +863,9 @@ def get_task_stats(users, user_id, option=None):
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
-          ]
-        ]
+        ],
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
   else:
@@ -796,6 +915,62 @@ def add_description(users, user_id, description):
   temp_vars[user_id]['task_description'] = description
   db.write('users', users)
   return f'Current task: {get_name(users, user_id, "task", task_id)}\nDescription: {description}'
+
+def get_tags_reply_markup(users, user_id, entry_id):
+  entry_name = get_name(users, user_id, 'all', entry_id)
+  reply_text = f'Tag editor: {entry_name}\n-----------------------------'
+  added_tags_names = temp_vars[user_id]['tag_editor_active_tags']
+  for tag_name in added_tags_names:
+    reply_text += f'\n{tag_name}'
+  all_tags_names = get_all_tags_names(users, user_id, enabled_only=True)
+  keyboard = []
+  for tag_name in all_tags_names:
+    if tag_name in added_tags_names:
+      tag_text = f'[{tag_name}]'
+    else:
+      tag_text = f'{tag_name}'
+    keyboard += [InlineKeyboardButton(tag_text, callback_data = f'tag:{tag_name}')],
+  keyboard += [InlineKeyboardButton('Save changes', callback_data = 'tag:save-changes')],
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return reply_text, reply_markup
+
+def handle_tags_query(users, user_id, query):
+  tag_editor_entry_id = temp_vars[user_id]['tag_editor_entry_id']
+  tag_editor_active_tags = temp_vars[user_id]['tag_editor_active_tags']
+  if tag_editor_entry_id:
+    entry_name = get_name(users, user_id, 'all', tag_editor_entry_id)
+    if query == 'save-changes':
+      tag_ids_list = []
+      for tag_name in tag_editor_active_tags: # Building list of tag ids
+        tag_ids_list.append(get_tag_id(users, user_id, tag_name))
+      if tag_editor_entry_id in users[user_id]['tasks'].keys(): # If entry is a task
+        users[user_id]['tasks'][tag_editor_entry_id]['tags'] = tag_ids_list
+        db.write('users', users)
+        reply_text = f'Tag editor: {entry_name}\n-----------------------------'
+        for tag_name in tag_editor_active_tags:
+          reply_text += f'\n{tag_name}'
+        enable_menu(users, user_id)
+        return reply_text, None
+      elif tag_editor_entry_id in users[user_id]['places'].keys(): # If entry is a place
+        users[user_id]['places'][tag_editor_entry_id]['tags'] = tag_ids_list
+        db.write('users', users)
+        reply_text = f'Tag editor: {entry_name}\n-----------------------------'
+        for tag_name in tag_editor_active_tags:
+          reply_text += f'\n{tag_name}'
+        enable_menu(users, user_id)
+        return reply_text, None
+    else:
+      tag_name = query
+      if tag_name in get_all_tags_names(users, user_id):
+        if tag_name in tag_editor_active_tags:
+          tag_editor_active_tags.remove(tag_name)
+          temp_vars[user_id]['tag_editor_active_tags'] = tag_editor_active_tags
+        else:
+          tag_editor_active_tags.append(tag_name)
+          temp_vars[user_id]['tag_editor_active_tags'] = tag_editor_active_tags
+        return get_tags_reply_markup(users, user_id, tag_editor_entry_id)
+  enable_menu(users, user_id)
+  return 'Error, restart tag editor', None
 
 def convert_interval_to_seconds(text):
   if text[:1] == '-': text = text[1:]
@@ -1010,6 +1185,39 @@ def menu_handler(user_id, text):
       tgbot.send_message(user_id, f'Place "{place_name}" does not exist', keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
 
+  # STATE - change_tags
+  elif state == 'change_tags':
+    entry_name = text
+    entry_id = get_id(users, user_id, 'all', entry_name)
+    temp_vars[user_id]['tag_editor_entry_id'] = entry_id
+    temp_vars[user_id]['tag_editor_active_tags'] = get_entry_tags_names(users, user_id, entry_id)
+    disable_menu(user_id)
+    reply_text, reply_markup = get_tags_reply_markup(users, user_id, entry_id)
+    tgbot.send_message(user_id, reply_text, reply_markup=reply_markup)
+    change_state(users, user_id, 'main_menu')
+
+  # STATE - add_tag
+  elif state == 'add_tag':
+    tag_name = text
+    result = add_tag(users, user_id, tag_name)
+    if result:
+      tgbot.send_message(user_id, result, keyboard=get_main_menu(users, user_id))
+      change_state(users, user_id, 'main_menu')
+    else:
+      tgbot.send_message(user_id, f'Tag "{tag_name}" already exists\nChoose another name\n/cancel')
+
+  # STATE - disable_tag
+  elif state == 'disable_tag':
+    tag_name = text
+    tag_id = get_tag_id(users, user_id, tag_name)
+    if tag_id != None:
+      users[user_id]['tags'][tag_id]['enabled'] = False
+      db.write('users',users)
+      tgbot.send_message(user_id, f'Disabled tag "{tag_name}"', keyboard=get_main_menu(users, user_id))
+    else:
+      tgbot.send_message(user_id, f'Tag "{tag_name}" does not exist', keyboard=get_main_menu(users, user_id))
+    change_state(users, user_id, 'main_menu')
+
   # STATE - set_timezone
   elif state == 'set_timezone':
     try:
@@ -1093,9 +1301,27 @@ def menu_handler(user_id, text):
       else:
         tgbot.send_message(user_id, "No disabled tasks")
 
+    elif button_name == constants.get_name('task_tags'):
+      tasks = get_all_names(users, user_id, 'task')
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        tgbot.send_message(user_id, 'Choose a task to edit\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'change_tags')
+      else:
+        tgbot.send_message(user_id, "You have no tasks")
+
+    elif button_name == constants.get_name('place_tags'):
+      tasks = get_all_names(users, user_id, 'place')
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        tgbot.send_message(user_id, 'Choose a place to edit\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'change_tags')
+      else:
+        tgbot.send_message(user_id, "You have no places")
+
     elif button_name == constants.get_name('task_stats'):
       temp_vars[user_id]['stats_delta'] = 0
-      report, reply_markup = get_task_stats(users ,user_id, users[user_id]['stats_type'])
+      report, reply_markup = get_stats(users ,user_id, users[user_id]['stats_type'])
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('add_place'):
@@ -1119,6 +1345,28 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'add_place')
       else:
         tgbot.send_message(user_id, "No disabled places")
+
+    elif button_name == constants.get_name('add_tag'):
+      tgbot.send_message(user_id, 'Name a tag\n/cancel', keyboard = [])
+      change_state(users, user_id, 'add_tag')
+
+    elif button_name == constants.get_name('disable_tag'):
+      tags = get_all_tags_names(users, user_id, enabled_only=True)
+      if tags:
+        keyboard = get_options_keyboard(tags, columns=3)
+        tgbot.send_message(user_id, 'Choose a tag to disable\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'disable_tag')
+      else:
+        tgbot.send_message(user_id, "No enabled tags")
+
+    elif button_name == constants.get_name('enable_tag'):
+      tags = get_all_tags_names(users, user_id, disabled_only=True)
+      if tags:
+        keyboard = get_options_keyboard(tags, columns=3)
+        tgbot.send_message(user_id, 'Choose a tag to enable\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'add_tag')
+      else:
+        tgbot.send_message(user_id, "No disabled tags")
 
     else: 
       stop_string = constants.get_name('stop')

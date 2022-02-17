@@ -21,6 +21,9 @@ def archive(filename='backup', folder='backup', max_backups=0):
       files = os.listdir(folder)
       files = [os.path.join(folder, f) for f in files] # add path to each file
       files.sort(key=lambda x: os.path.getmtime(x))
+      for file in files:
+        if os.path.isdir(file):
+          files.remove(file)
       if len(files) > max_backups:
         log.info(f'Found more than {max_backups} backups, removing {files[0]}')
         os.remove(files[0])
