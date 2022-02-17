@@ -132,7 +132,7 @@ def callback_handler(update, context):
   logic.check_temp_vars(user_id)
   function, option = query.data.split(':')
   if function == 'task_stats':
-    report, reply_markup = logic.get_task_stats(users, user_id, option)
+    report, reply_markup = logic.get_stats(users, user_id, option)
     with suppress(telegram.error.BadRequest):
       query.edit_message_text(text=report, reply_markup=reply_markup)
   elif function == 'description':

@@ -11,6 +11,7 @@ def get_temp_vars():
       'timer_message':None,
       'timer_start':None,
       'stats_delta':0,
+      'stats_info':'tasks',
       'place_name':None,
       }
 

@@ -161,9 +161,9 @@ def change_menu_state(users, user_id, new_state):
   log.debug(f'New menu state "{new_state}" for user @{username}({user_id})')
 
 def get_id(users, user_id, info_type, info_name):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   for entry_id in entry_list:
     if entry_list[entry_id]['name'] == info_name:
@@ -171,16 +171,16 @@ def get_id(users, user_id, info_type, info_name):
   return None
 
 def get_name(users, user_id, info_type, info_id):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   return entry_list[info_id]['name']
 
 def get_enabled(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   enabled_entries = []
   for entry_id in entry_list:
@@ -189,9 +189,9 @@ def get_enabled(users, user_id, info_type):
   return enabled_entries
 
 def get_disabled(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   disabled_entries = []
   for entry_id in entry_list:
@@ -200,9 +200,9 @@ def get_disabled(users, user_id, info_type):
   return disabled_entries
 
 def get_enabled_names(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   enabled_entries = []
   for entry_id in entry_list:
@@ -211,9 +211,9 @@ def get_enabled_names(users, user_id, info_type):
   return enabled_entries
 
 def get_disabled_names(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   disabled_entries = []
   for entry_id in entry_list:
@@ -222,16 +222,16 @@ def get_disabled_names(users, user_id, info_type):
   return disabled_entries
 
 def get_all(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   return entry_list.keys()
 
 def get_all_names(users, user_id, info_type):
-  if info_type == 'task':
+  if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
-  if info_type == 'place':
+  elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
   all_entries = []
   for entry_id in entry_list:
@@ -556,12 +556,19 @@ def update_place_totals(users, user_id, place_id, tz_start_time, tz_end_time, to
     db.write(totals_path, totals)
     return
 
-def get_task_stats(users, user_id, option=None):
+def get_stats(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
+  stats_info = temp_vars[user_id]['stats_info']
   stats_type = users[user_id]['stats_type']
   timezone = users[user_id]['timezone']
   tzdelta = datetime.timezone(datetime.timedelta(hours=timezone))
-  if option == 'alltime':
+  if option == 'tasks':
+    stats_info = 'tasks'
+    temp_vars[user_id]['stats_info'] = stats_info
+  elif option == 'places':
+    stats_info = 'places'
+    temp_vars[user_id]['stats_info'] = stats_info
+  elif option == 'alltime':
     stats_type = 'alltime'
     stats_delta = 0
     temp_vars[user_id]['stats_delta'] = 0
@@ -598,18 +605,24 @@ def get_task_stats(users, user_id, option=None):
     stats_delta -= 1
     temp_vars[user_id]['stats_delta'] = stats_delta
 
+  if stats_info == 'tasks':
+    stats_info_button = [InlineKeyboardButton('Place stats', callback_data='task_stats:places')]
+  elif stats_info == 'places':
+    stats_info_button = [InlineKeyboardButton('Task stats', callback_data='task_stats:tasks')]
+
   if stats_type == 'detailed':
-    tasks = get_all(users, user_id, 'task')
+    entries = get_all(users, user_id, stats_info)
+    entry_list = users[user_id][stats_info]
     report = 'Detailed statistics:\n--------------------'
-    for task_id in tasks:
-      task_info = users[user_id]['tasks'][task_id]
-      date_added = timezoned(users, user_id, task_info['date_added'])
+    for entry_id in entries:
+      entry_info = entry_list[entry_id]
+      date_added = timezoned(users, user_id, entry_info['date_added'])
       date_added = datetime.datetime.utcfromtimestamp(date_added)
-      time_total = datetime.timedelta(seconds=task_info['time_total'])
-      time_total_hours = task_info['time_total'] / 60 / 60
-      task_status = ''
-      if not task_info['enabled']: task_status = '(disabled)'
-      report += f'''\n{get_name(users, user_id, 'task', task_id)}{task_status}
+      time_total = datetime.timedelta(seconds=entry_info['time_total'])
+      time_total_hours = entry_info['time_total'] / 60 / 60
+      entry_status = ''
+      if not entry_info['enabled']: entry_status = ' (disabled)'
+      report += f'''\n{get_name(users, user_id, stats_info, entry_id)}{entry_status}
       Creation date: {date_added}
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
@@ -619,18 +632,20 @@ def get_task_stats(users, user_id, option=None):
         InlineKeyboardButton('Year', callback_data='task_stats:year')
         ],
         [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
-        ]
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'alltime':
-    tasks = get_enabled(users, user_id, 'task')
+    entries = get_enabled(users, user_id, stats_info)
+    entry_list = users[user_id][stats_info]
     report = 'All time statistics:\n--------------------'
-    for task_id in tasks:
-      task_info = users[user_id]['tasks'][task_id]
-      time_total = datetime.timedelta(seconds=task_info['time_total'])
-      time_total_hours = task_info['time_total'] / 60 / 60
-      report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+    for entry_id in entries:
+      entry_info = entry_list[entry_id]
+      time_total = datetime.timedelta(seconds=entry_info['time_total'])
+      time_total_hours = entry_info['time_total'] / 60 / 60
+      report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     keyboard = [
         [
         InlineKeyboardButton('Day', callback_data='task_stats:day'),
@@ -638,28 +653,29 @@ def get_task_stats(users, user_id, option=None):
         InlineKeyboardButton('Year', callback_data='task_stats:year')
         ],
         [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        stats_info_button,
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'year':
-    timedelta = datetime.timedelta(days=30 * stats_delta)
+    timedelta = datetime.timedelta(days=365 * stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'task-totals-{user_id}'
+    filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Year statistics: {date.year}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
       try:
         year = str(date.year)
-        for task_id in totals[year]['total_time']:
-          task_time = totals[year]['total_time'][task_id]
-          time_total = datetime.timedelta(seconds=task_time)
-          time_total_hours = task_time / 60 / 60
-          report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        for entry_id in totals[year]['total_time']:
+          entry_time = totals[year]['total_time'][entry_id]
+          time_total = datetime.timedelta(seconds=entry_time)
+          time_total_hours = entry_time / 60 / 60
+          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
       except KeyError:
-        report += f'\nNo data for {date.year}-{date.month}'
+        report += f'\nNo data for {date.year}'
     else:
-      report += f'\nNo data for {date.year}-{date.month}'
+      report += f'\nNo data for {date.year}'
     keyboard = [
         [
           InlineKeyboardButton('Day', callback_data='task_stats:day'),
@@ -672,26 +688,27 @@ def get_task_stats(users, user_id, option=None):
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
-          ]
-        ]
+        ],
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'month':
     timedelta = datetime.timedelta(days=30 * stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'task-totals-{user_id}'
+    filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Month statistics: {date.year}-{date.month}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
       try:
         year = str(date.year)
         month = str(date.month)
-        for task_id in totals[year][month]['total_time']:
-          task_time = totals[year][month]['total_time'][task_id]
-          time_total = datetime.timedelta(seconds=task_time)
-          time_total_hours = task_time / 60 / 60
-          report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        for entry_id in totals[year][month]['total_time']:
+          entry_time = totals[year][month]['total_time'][entry_id]
+          time_total = datetime.timedelta(seconds=entry_time)
+          time_total_hours = entry_time / 60 / 60
+          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
       except KeyError:
         report += f'\nNo data for {date.year}-{date.month}'
     else:
@@ -708,15 +725,16 @@ def get_task_stats(users, user_id, option=None):
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
-          ]
-        ]
+        ],
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'day':
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
-    filename = f'task-totals-{user_id}'
+    filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Day statistics: {date.year}-{date.month}-{date.day}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
@@ -724,11 +742,11 @@ def get_task_stats(users, user_id, option=None):
         year = str(date.year)
         month = str(date.month)
         day = str(date.day)
-        for task_id in totals[year][month][day]['total_time']:
-          task_time = totals[year][month][day]['total_time'][task_id]
-          time_total = datetime.timedelta(seconds=task_time)
-          time_total_hours = task_time / 60 / 60
-          report += f'\n{get_name(users, user_id, "task", task_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        for entry_id in totals[year][month][day]['total_time']:
+          entry_time = totals[year][month][day]['total_time'][entry_id]
+          time_total = datetime.timedelta(seconds=entry_time)
+          time_total_hours = entry_time / 60 / 60
+          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
       except KeyError:
         report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     else:
@@ -745,8 +763,9 @@ def get_task_stats(users, user_id, option=None):
         [
           InlineKeyboardButton('<', callback_data='task_stats:left'),
           InlineKeyboardButton('>', callback_data='task_stats:right'),
-          ]
-        ]
+        ],
+        stats_info_button,
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
   else:
@@ -1095,7 +1114,7 @@ def menu_handler(user_id, text):
 
     elif button_name == constants.get_name('task_stats'):
       temp_vars[user_id]['stats_delta'] = 0
-      report, reply_markup = get_task_stats(users ,user_id, users[user_id]['stats_type'])
+      report, reply_markup = get_stats(users ,user_id, users[user_id]['stats_type'])
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('add_place'):
