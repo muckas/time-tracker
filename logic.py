@@ -62,7 +62,7 @@ def update_timer(user_id, message, start_time, task_name, task_description):
     description = f'Description: {task_description}'
   else:
     description = f'No description'
-  text = f'{task_name}\n{description}\n{timer}'
+  text = f'{timer}\n{task_name}\n{description}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
