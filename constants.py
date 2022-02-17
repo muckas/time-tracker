@@ -93,24 +93,28 @@ def get_new_calendar(name, timezone):
 def get_name(name):
   names = {
     'disable_menu':'Hide menu',
+    'set_timezone':'Set timezone',
     'menu_main':'Main menu',
     'menu_edit':'Editing menu',
     'menu_settings':'Settings',
+    'task_stats':'Show stats',
+
     'start_task':'Start task',
     'add_task':'Add task',
     'remove_task':'Disable task',
     'enable_task':'Enable task',
+    'change_description': 'Change description',
+
     'stop':'Stop ',
-    'task_stats':'Show stats',
-    'set_timezone':'Set timezone',
     'now':'Now',
     'show_disabled':'Show disabled',
     'show_enabled':'Show enabled',
-    'change_description': 'Change description',
+
     'change_place':'Place: ',
     'add_place':'Add place',
     'disable_place':'Disable place',
     'enable_place':'Enable place',
+
     'add_tag':'Add tag',
     'disable_tag':'Disable tag',
     'enable_tag':'Enable tag',

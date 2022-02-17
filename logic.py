@@ -128,9 +128,9 @@ def get_main_menu(users, user_id):
     keyboard = [
         [constants.get_name('set_timezone')],
         [
-          constants.get_name('add_task'),
-          constants.get_name('enable_task'),
-          constants.get_name('remove_task'),
+          constants.get_name('add_tag'),
+          constants.get_name('enable_tag'),
+          constants.get_name('disable_tag'),
         ],
         [
           constants.get_name('menu_main'),
@@ -289,16 +289,20 @@ def get_entry_tags_names(users, user_id, entry_id):
     tags_names.append(get_tag_name(users, user_id, tag_id))
   return tags_names
 
-def get_all_tags(users, user_id, enabled_only=False):
+def get_all_tags(users, user_id, enabled_only=False, disabled_only=False):
   tags_list = users[user_id]['tags']
   if enabled_only:
-    for tag_id in tags_list:
+    for tag_id in tags_list.copy():
       if tags_list[tag_id]['enabled'] == False:
+        tags_list.pop(tag_id)
+  elif disabled_only:
+    for tag_id in tags_list.copy():
+      if tags_list[tag_id]['enabled'] == True:
         tags_list.pop(tag_id)
   return tags_list
 
-def get_all_tags_names(users, user_id, enabled_only=False):
-  tags_list = get_all_tags(users, user_id, enabled_only)
+def get_all_tags_names(users, user_id, enabled_only=False, disabled_only=False):
+  tags_list = get_all_tags(users, user_id, enabled_only, disabled_only)
   names_list = []
   for tag_id in tags_list:
     names_list.append(tags_list[tag_id]['name'])
@@ -633,6 +637,24 @@ def update_place_totals(users, user_id, place_id, tz_start_time, tz_end_time, to
   else:
     db.write(totals_path, totals)
     return
+
+def add_tag(users, user_id, tag_name, enabled=True):
+  if tag_name in get_all_tags_names(users, user_id):
+    tag_id = get_tag_id(users, user_id, tag_name)
+    if users[user_id]['tags'][tag_id]['enabled']:
+      return None
+    else:
+      users[user_id]['tags'][tag_id]['enabled'] = True
+      db.write('users', users)
+      return f'Enabled tag "{tag_name}"'
+  else: # adding tag to db
+    new_tag_id = str(uuid.uuid4())
+    users[user_id]['tags'].update(
+        {new_tag_id:constants.get_default_tag(tag_name)}
+        )
+    users[user_id]['tags'][new_tag_id]['enabled'] = enabled
+    db.write('users', users)
+    return f'Added tag "{tag_name}"'
 
 def get_stats(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
@@ -1151,6 +1173,18 @@ def menu_handler(user_id, text):
     else:
       tgbot.send_message(user_id, f'Place "{place_name}" already exists\nChoose another name\n/cancel')
 
+  # STATE - disable_place
+  elif state == 'disable_place':
+    place_name = text
+    place_id = get_id(users, user_id, 'place', place_name)
+    if place_id != None:
+      users[user_id]['places'][place_id]['enabled'] = False
+      db.write('users',users)
+      tgbot.send_message(user_id, f'Disabled place "{place_name}"', keyboard=get_main_menu(users, user_id))
+    else:
+      tgbot.send_message(user_id, f'Place "{place_name}" does not exist', keyboard=get_main_menu(users, user_id))
+    change_state(users, user_id, 'main_menu')
+
   # STATE - change_tags
   elif state == 'change_tags':
     entry_name = text
@@ -1162,16 +1196,26 @@ def menu_handler(user_id, text):
     tgbot.send_message(user_id, reply_text, reply_markup=reply_markup)
     change_state(users, user_id, 'main_menu')
 
-  # STATE - disable_place
-  elif state == 'disable_place':
-    place_name = text
-    place_id = get_id(users, user_id, 'place', place_name)
-    if place_id != None:
-      users[user_id]['places'][place_id]['enabled'] = False
-      db.write('users',users)
-      tgbot.send_message(user_id, f'Disabled place "{place_name}"', keyboard=get_main_menu(users, user_id))
+  # STATE - add_tag
+  elif state == 'add_tag':
+    tag_name = text
+    result = add_tag(users, user_id, tag_name)
+    if result:
+      tgbot.send_message(user_id, result, keyboard=get_main_menu(users, user_id))
+      change_state(users, user_id, 'main_menu')
     else:
-      tgbot.send_message(user_id, f'Place "{place_name}" does not exist', keyboard=get_main_menu(users, user_id))
+      tgbot.send_message(user_id, f'Tag "{tag_name}" already exists\nChoose another name\n/cancel')
+
+  # STATE - disable_tag
+  elif state == 'disable_tag':
+    tag_name = text
+    tag_id = get_tag_id(users, user_id, tag_name)
+    if tag_id != None:
+      users[user_id]['tags'][tag_id]['enabled'] = False
+      db.write('users',users)
+      tgbot.send_message(user_id, f'Disabled tag "{tag_name}"', keyboard=get_main_menu(users, user_id))
+    else:
+      tgbot.send_message(user_id, f'Tag "{tag_name}" does not exist', keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
 
   # STATE - set_timezone
@@ -1301,6 +1345,28 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'add_place')
       else:
         tgbot.send_message(user_id, "No disabled places")
+
+    elif button_name == constants.get_name('add_tag'):
+      tgbot.send_message(user_id, 'Name a tag\n/cancel', keyboard = [])
+      change_state(users, user_id, 'add_tag')
+
+    elif button_name == constants.get_name('disable_tag'):
+      tags = get_all_tags_names(users, user_id, enabled_only=True)
+      if tags:
+        keyboard = get_options_keyboard(tags, columns=3)
+        tgbot.send_message(user_id, 'Choose a tag to disable\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'disable_tag')
+      else:
+        tgbot.send_message(user_id, "No enabled tags")
+
+    elif button_name == constants.get_name('enable_tag'):
+      tags = get_all_tags_names(users, user_id, disabled_only=True)
+      if tags:
+        keyboard = get_options_keyboard(tags, columns=3)
+        tgbot.send_message(user_id, 'Choose a tag to enable\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'add_tag')
+      else:
+        tgbot.send_message(user_id, "No disabled tags")
 
     else: 
       stop_string = constants.get_name('stop')
