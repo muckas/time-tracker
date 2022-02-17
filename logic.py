@@ -1151,8 +1151,8 @@ def menu_handler(user_id, text):
     else:
       tgbot.send_message(user_id, f'Place "{place_name}" already exists\nChoose another name\n/cancel')
 
-  # STATE - task_tags
-  elif state == 'task_tags':
+  # STATE - change_tags
+  elif state == 'change_tags':
     entry_name = text
     entry_id = get_id(users, user_id, 'all', entry_name)
     temp_vars[user_id]['tag_editor_entry_id'] = entry_id
@@ -1262,9 +1262,18 @@ def menu_handler(user_id, text):
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to edit\n/cancel', keyboard=keyboard)
-        change_state(users, user_id, 'task_tags')
+        change_state(users, user_id, 'change_tags')
       else:
         tgbot.send_message(user_id, "You have no tasks")
+
+    elif button_name == constants.get_name('place_tags'):
+      tasks = get_all_names(users, user_id, 'place')
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        tgbot.send_message(user_id, 'Choose a place to edit\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'change_tags')
+      else:
+        tgbot.send_message(user_id, "You have no places")
 
     elif button_name == constants.get_name('task_stats'):
       temp_vars[user_id]['stats_delta'] = 0
