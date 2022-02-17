@@ -112,25 +112,53 @@ def get_main_menu(users, user_id):
       change_place_button = constants.get_name('change_place') + 'None'
     keyboard = [
         task_line,
-        [change_place_button],
-        [constants.get_name('task_stats'), constants.get_name('menu_edit'), constants.get_name('menu_settings')],
-        ]
+        [
+          change_place_button
+        ],
+        [
+          constants.get_name('task_stats'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings')
+        ],
+      ]
     if users[user_id]['timezone'] == None:
       keyboard[0] = [constants.get_name('set_timezone')]
 
   elif menu_state == 'menu_settings':
     keyboard = [
         [constants.get_name('set_timezone')],
-        [constants.get_name('add_task'), constants.get_name('enable_task'), constants.get_name('remove_task')],
-        [constants.get_name('menu_main'), constants.get_name('menu_edit'), constants.get_name('disable_menu')],
-        ]
+        [
+          constants.get_name('add_task'),
+          constants.get_name('enable_task'),
+          constants.get_name('remove_task'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('disable_menu'),
+        ],
+      ]
 
   elif menu_state == 'menu_edit':
     keyboard = [
-        [constants.get_name('add_task'), constants.get_name('enable_task'), constants.get_name('remove_task')],
-        [constants.get_name('add_place'), constants.get_name('enable_place'), constants.get_name('disable_place')],
-        [constants.get_name('menu_main'), constants.get_name('menu_edit'), constants.get_name('menu_settings')],
-        ]
+        [
+          constants.get_name('add_task'),
+          constants.get_name('enable_task'),
+          constants.get_name('remove_task'),
+          constants.get_name('task_tags'),
+        ],
+        [
+          constants.get_name('add_place'),
+          constants.get_name('enable_place'),
+          constants.get_name('disable_place'),
+          constants.get_name('place_tags'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
   return keyboard
 
 def get_options_keyboard(options, columns=2):
@@ -145,7 +173,7 @@ def get_options_keyboard(options, columns=2):
 
 def enable_menu(users, user_id):
   change_state(users, user_id, 'main_menu')
-  tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
+  tgbot.send_message(user_id, 'Menu enabled', keyboard=get_main_menu(users, user_id))
 
 def disable_menu(user_id):
   tgbot.send_message(user_id, 'Menu disabled', keyboard=[])
@@ -165,6 +193,8 @@ def get_id(users, user_id, info_type, info_name):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   for entry_id in entry_list:
     if entry_list[entry_id]['name'] == info_name:
       return entry_id
@@ -175,6 +205,8 @@ def get_name(users, user_id, info_type, info_id):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   return entry_list[info_id]['name']
 
 def get_enabled(users, user_id, info_type):
@@ -226,6 +258,8 @@ def get_all(users, user_id, info_type):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   return entry_list.keys()
 
 def get_all_names(users, user_id, info_type):
@@ -233,10 +267,54 @@ def get_all_names(users, user_id, info_type):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   all_entries = []
   for entry_id in entry_list:
     all_entries.append(entry_list[entry_id]['name'])
   return all_entries
+
+def get_entry_tags(users, user_id, entry_id):
+  if entry_id in users[user_id]['tasks'].keys():
+    return users[user_id]['tasks'][entry_id]['tags']
+  elif entry_id in users[user_id]['places'].keys():
+    return users[user_id]['places'][entry_id]['tags']
+  else:
+    return None
+
+def get_entry_tags_names(users, user_id, entry_id):
+  tags_list = get_entry_tags(users, user_id, entry_id)
+  tags_names = []
+  for tag_id in tags_list:
+    tags_names.append(get_tag_name(users, user_id, tag_id))
+  return tags_names
+
+def get_all_tags(users, user_id, enabled_only=False):
+  tags_list = users[user_id]['tags']
+  if enabled_only:
+    for tag_id in tags_list:
+      if tags_list[tag_id]['enabled'] == False:
+        tags_list.pop(tag_id)
+  return tags_list
+
+def get_all_tags_names(users, user_id, enabled_only=False):
+  tags_list = get_all_tags(users, user_id, enabled_only)
+  names_list = []
+  for tag_id in tags_list:
+    names_list.append(tags_list[tag_id]['name'])
+  return names_list
+
+def get_tag_name(users, user_id, tag_id):
+  tags_list = users[user_id]['tags']
+  if tag_id in tags_list.keys():
+    return tags_list[tag_id]['name']
+
+def get_tag_id(users, user_id, name):
+  tags_list = users[user_id]['tags']
+  for tag_id in tags_list:
+    if tags_list[tag_id]['name'] == name:
+      return tag_id
+  return None
 
 def add_task(users, user_id, task_name, enabled=True):
   if task_name in get_all_names(users, user_id, 'task'):
@@ -816,6 +894,62 @@ def add_description(users, user_id, description):
   db.write('users', users)
   return f'Current task: {get_name(users, user_id, "task", task_id)}\nDescription: {description}'
 
+def get_tags_reply_markup(users, user_id, entry_id):
+  entry_name = get_name(users, user_id, 'all', entry_id)
+  reply_text = f'Tag editor: {entry_name}\n-----------------------------'
+  added_tags_names = temp_vars[user_id]['tag_editor_active_tags']
+  for tag_name in added_tags_names:
+    reply_text += f'\n{tag_name}'
+  all_tags_names = get_all_tags_names(users, user_id, enabled_only=True)
+  keyboard = []
+  for tag_name in all_tags_names:
+    if tag_name in added_tags_names:
+      tag_text = f'[{tag_name}]'
+    else:
+      tag_text = f'{tag_name}'
+    keyboard += [InlineKeyboardButton(tag_text, callback_data = f'tag:{tag_name}')],
+  keyboard += [InlineKeyboardButton('Save changes', callback_data = 'tag:save-changes')],
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return reply_text, reply_markup
+
+def handle_tags_query(users, user_id, query):
+  tag_editor_entry_id = temp_vars[user_id]['tag_editor_entry_id']
+  tag_editor_active_tags = temp_vars[user_id]['tag_editor_active_tags']
+  if tag_editor_entry_id:
+    entry_name = get_name(users, user_id, 'all', tag_editor_entry_id)
+    if query == 'save-changes':
+      tag_ids_list = []
+      for tag_name in tag_editor_active_tags: # Building list of tag ids
+        tag_ids_list.append(get_tag_id(users, user_id, tag_name))
+      if tag_editor_entry_id in users[user_id]['tasks'].keys(): # If entry is a task
+        users[user_id]['tasks'][tag_editor_entry_id]['tags'] = tag_ids_list
+        db.write('users', users)
+        reply_text = f'Tag editor: {entry_name}\n-----------------------------'
+        for tag_name in tag_editor_active_tags:
+          reply_text += f'\n{tag_name}'
+        enable_menu(users, user_id)
+        return reply_text, None
+      elif tag_editor_entry_id in users[user_id]['places'].keys(): # If entry is a place
+        users[user_id]['places'][tag_editor_entry_id]['tags'] = tag_ids_list
+        db.write('users', users)
+        reply_text = f'Tag editor: {entry_name}\n-----------------------------'
+        for tag_name in tag_editor_active_tags:
+          reply_text += f'\n{tag_name}'
+        enable_menu(users, user_id)
+        return reply_text, None
+    else:
+      tag_name = query
+      if tag_name in get_all_tags_names(users, user_id):
+        if tag_name in tag_editor_active_tags:
+          tag_editor_active_tags.remove(tag_name)
+          temp_vars[user_id]['tag_editor_active_tags'] = tag_editor_active_tags
+        else:
+          tag_editor_active_tags.append(tag_name)
+          temp_vars[user_id]['tag_editor_active_tags'] = tag_editor_active_tags
+        return get_tags_reply_markup(users, user_id, tag_editor_entry_id)
+  enable_menu(users, user_id)
+  return 'Error, restart tag editor', None
+
 def convert_interval_to_seconds(text):
   if text[:1] == '-': text = text[1:]
   with suppress(ValueError):
@@ -1017,6 +1151,17 @@ def menu_handler(user_id, text):
     else:
       tgbot.send_message(user_id, f'Place "{place_name}" already exists\nChoose another name\n/cancel')
 
+  # STATE - task_tags
+  elif state == 'task_tags':
+    entry_name = text
+    entry_id = get_id(users, user_id, 'all', entry_name)
+    temp_vars[user_id]['tag_editor_entry_id'] = entry_id
+    temp_vars[user_id]['tag_editor_active_tags'] = get_entry_tags_names(users, user_id, entry_id)
+    disable_menu(user_id)
+    reply_text, reply_markup = get_tags_reply_markup(users, user_id, entry_id)
+    tgbot.send_message(user_id, reply_text, reply_markup=reply_markup)
+    change_state(users, user_id, 'main_menu')
+
   # STATE - disable_place
   elif state == 'disable_place':
     place_name = text
@@ -1111,6 +1256,15 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'add_task')
       else:
         tgbot.send_message(user_id, "No disabled tasks")
+
+    elif button_name == constants.get_name('task_tags'):
+      tasks = get_all_names(users, user_id, 'task')
+      if tasks:
+        keyboard = get_options_keyboard(tasks, columns=3)
+        tgbot.send_message(user_id, 'Choose a task to edit\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'task_tags')
+      else:
+        tgbot.send_message(user_id, "You have no tasks")
 
     elif button_name == constants.get_name('task_stats'):
       temp_vars[user_id]['stats_delta'] = 0
