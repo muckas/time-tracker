@@ -404,11 +404,12 @@ def stop_task(users, user_id, task_id, time_text):
       return None
   timezone = users[user_id]['timezone']
   write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone)
-  # Writing task total time to users.json
+  # Updating task info in users.json
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
   task_duration = datetime.timedelta(seconds=task_duration_sec)
   users[user_id]['active_task'] = None
+  users[user_id]['tasks'][task_id]['last_active'] = task_end_time
   users[user_id]['tasks'][task_id]['time_total'] += task_duration_sec
   db.write('users',users)
   return task_duration
@@ -563,6 +564,7 @@ def stop_place(users, user_id, place_id, stop_time):
   place_duration_sec = place_end_time - place_start_time
   place_duration = datetime.timedelta(seconds=place_duration_sec)
   users[user_id]['active_place'] = None
+  users[user_id]['places'][place_id]['last_active'] = place_end_time
   users[user_id]['places'][place_id]['time_total'] += place_duration_sec
   db.write('users',users)
   return place_duration
@@ -768,9 +770,22 @@ def get_stats(users, user_id, option=None):
       time_total = datetime.timedelta(seconds=entry_info['time_total'])
       time_total_hours = entry_info['time_total'] / 60 / 60
       entry_status = ''
+      if entry_info['last_active']:
+        last_active = timezoned(users, user_id, entry_info['last_active'])
+        last_active = datetime.datetime.utcfromtimestamp(last_active)
+        last_active_ago = int(time.time()) - int(entry_info['last_active'])
+        if last_active_ago > 60*60*24:
+          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active']).days
+          last_active_ago = f'{last_active_ago} days'
+        else:
+          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active'])
+      else:
+        last_active = 'never'
+        last_active_ago = 'never'
       if not entry_info['enabled']: entry_status = ' (disabled)'
       report += f'''\n{get_name(users, user_id, stats_info, entry_id)}{entry_status}
       Creation date: {date_added}
+      Last active: {last_active} ~ {last_active_ago} ago
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
         [

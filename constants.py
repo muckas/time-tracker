@@ -39,6 +39,7 @@ def get_default_task(name):
       'name': name,
       'enabled': True,
       'date_added': int(time.time()),
+      'last_active': None,
       'time_total': 0,
       'descriptions':[],
       'tags':[],
@@ -49,6 +50,7 @@ def get_default_place(name):
       'name': name,
       'enabled': True,
       'date_added': int(time.time()),
+      'last_active': None,
       'time_total': 0,
       'tags':[],
       }
@@ -111,6 +113,7 @@ def get_name(name):
     'add_task':'Add task',
     'remove_task':'Disable task',
     'enable_task':'Enable task',
+    'task_tags':'Task tags',
     'task_tags':'Task tags',
     'change_description': 'Change description',
 
