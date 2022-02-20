@@ -59,10 +59,10 @@ def update_timer(user_id, message, start_time, task_name, task_description):
   timer = int(time.time()) - start_time
   timer = datetime.timedelta(seconds=timer)
   if task_description:
-    description = f'Description: {task_description}'
+    description = f'\n{task_description}'
   else:
-    description = f'No description'
-  text = f'{timer}\n{task_name}\n{description}'
+    description = f''
+  text = f'{timer}\n{task_name}{description}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
@@ -142,16 +142,61 @@ def get_main_menu(users, user_id):
   elif menu_state == 'menu_edit':
     keyboard = [
         [
+          constants.get_name('menu_edit_tasks'),
+          constants.get_name('menu_edit_places'),
+        ],
+        [
+          constants.get_name('menu_edit_tags'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
+
+  elif menu_state == 'menu_edit_tasks':
+    keyboard = [
+        [
           constants.get_name('add_task'),
-          constants.get_name('enable_task'),
-          constants.get_name('remove_task'),
           constants.get_name('task_tags'),
         ],
         [
+          constants.get_name('enable_task'),
+          constants.get_name('remove_task'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
+
+  elif menu_state == 'menu_edit_places':
+    keyboard = [
+        [
           constants.get_name('add_place'),
+          constants.get_name('place_tags'),
+        ],
+        [
           constants.get_name('enable_place'),
           constants.get_name('disable_place'),
-          constants.get_name('place_tags'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
+
+  elif menu_state == 'menu_edit_tags':
+    keyboard = [
+        [
+          constants.get_name('add_tag'),
+        ],
+        [
+          constants.get_name('enable_tag'),
+          constants.get_name('disable_tag'),
         ],
         [
           constants.get_name('menu_main'),
@@ -359,11 +404,12 @@ def stop_task(users, user_id, task_id, time_text):
       return None
   timezone = users[user_id]['timezone']
   write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone)
-  # Writing task total time to users.json
+  # Updating task info in users.json
   users[user_id]['last_task_end_time'] = task_end_time
   task_duration_sec = task_end_time - task_start_time
   task_duration = datetime.timedelta(seconds=task_duration_sec)
   users[user_id]['active_task'] = None
+  users[user_id]['tasks'][task_id]['last_active'] = task_end_time
   users[user_id]['tasks'][task_id]['time_total'] += task_duration_sec
   db.write('users',users)
   return task_duration
@@ -518,6 +564,7 @@ def stop_place(users, user_id, place_id, stop_time):
   place_duration_sec = place_end_time - place_start_time
   place_duration = datetime.timedelta(seconds=place_duration_sec)
   users[user_id]['active_place'] = None
+  users[user_id]['places'][place_id]['last_active'] = place_end_time
   users[user_id]['places'][place_id]['time_total'] += place_duration_sec
   db.write('users',users)
   return place_duration
@@ -670,39 +717,41 @@ def get_stats(users, user_id, option=None):
     temp_vars[user_id]['stats_info'] = stats_info
   elif option == 'alltime':
     stats_type = 'alltime'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'detailed':
     stats_type = 'detailed'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'year':
     stats_type = 'year'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'month':
     stats_type = 'month'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'day':
     stats_type = 'day'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'left':
-    stats_delta += 1
+    if stats_type == 'day':
+      stats_delta += 1
+    elif stats_type == 'month':
+      stats_delta += 30
+    elif stats_type == 'year':
+      stats_delta += 365
     temp_vars[user_id]['stats_delta'] = stats_delta
-  elif option == 'right' and stats_delta > 0:
-    stats_delta -= 1
+  elif option == 'right':
+    if stats_type == 'day':
+      stats_delta -= 1
+    elif stats_type == 'month':
+      stats_delta -= 30
+    elif stats_type == 'year':
+      stats_delta -= 365
+    if stats_delta < 0:
+      stats_delta = 0
     temp_vars[user_id]['stats_delta'] = stats_delta
 
   if stats_info == 'tasks':
@@ -721,9 +770,22 @@ def get_stats(users, user_id, option=None):
       time_total = datetime.timedelta(seconds=entry_info['time_total'])
       time_total_hours = entry_info['time_total'] / 60 / 60
       entry_status = ''
+      if entry_info['last_active']:
+        last_active = timezoned(users, user_id, entry_info['last_active'])
+        last_active = datetime.datetime.utcfromtimestamp(last_active)
+        last_active_ago = int(time.time()) - int(entry_info['last_active'])
+        if last_active_ago > 60*60*24:
+          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active']).days
+          last_active_ago = f'{last_active_ago} days'
+        else:
+          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active'])
+      else:
+        last_active = 'never'
+        last_active_ago = 'never'
       if not entry_info['enabled']: entry_status = ' (disabled)'
       report += f'''\n{get_name(users, user_id, stats_info, entry_id)}{entry_status}
       Creation date: {date_added}
+      Last active: {last_active} ~ {last_active_ago} ago
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
         [
@@ -759,7 +821,7 @@ def get_stats(users, user_id, option=None):
     return report, reply_markup
 
   elif stats_type == 'year':
-    timedelta = datetime.timedelta(days=365 * stats_delta)
+    timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Year statistics: {date.year}\n--------------------'
@@ -795,7 +857,7 @@ def get_stats(users, user_id, option=None):
     return report, reply_markup
 
   elif stats_type == 'month':
-    timedelta = datetime.timedelta(days=30 * stats_delta)
+    timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Month statistics: {date.year}-{date.month}\n--------------------'
@@ -873,11 +935,14 @@ def get_stats(users, user_id, option=None):
 
 def get_descriptions_reply_markup(users, user_id, task_id):
   keyboard = []
+  max_inline_descriptions = 3
   i = 0
   for description in users[user_id]['tasks'][task_id]['descriptions']:
+    if i == max_inline_descriptions:
+      break
     keyboard += [InlineKeyboardButton(description, callback_data = f'description:{i}')],
     i += 1
-  keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
+  # keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
   reply_markup = InlineKeyboardMarkup(keyboard)
   return reply_markup
 
@@ -902,7 +967,7 @@ def handle_description_query(users, user_id, query):
     return 'No active task', None
 
 def add_description(users, user_id, description):
-  max_descriptions = 3
+  max_descriptions = 99
   task_id = users[user_id]['active_task']['id']
   if description in users[user_id]['tasks'][task_id]['descriptions']:
     users[user_id]['tasks'][task_id]['descriptions'].remove(description)
@@ -1254,6 +1319,18 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('menu_settings'):
       change_menu_state(users, user_id, 'menu_settings')
       tgbot.send_message(user_id, 'Settings', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_edit_tasks'):
+      change_menu_state(users, user_id, 'menu_edit_tasks')
+      tgbot.send_message(user_id, 'Editing tasks', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_edit_places'):
+      change_menu_state(users, user_id, 'menu_edit_places')
+      tgbot.send_message(user_id, 'Editing places', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_edit_tags'):
+      change_menu_state(users, user_id, 'menu_edit_tags')
+      tgbot.send_message(user_id, 'Editing tags', keyboard=get_main_menu(users, user_id))
 
     elif button_name == constants.get_name('set_timezone'):
       tgbot.send_message(user_id, 'Send hour offset for UTC\nValid range (-12...+14)\n/cancel', keyboard=[])

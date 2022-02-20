@@ -39,6 +39,7 @@ def get_default_task(name):
       'name': name,
       'enabled': True,
       'date_added': int(time.time()),
+      'last_active': None,
       'time_total': 0,
       'descriptions':[],
       'tags':[],
@@ -49,6 +50,7 @@ def get_default_place(name):
       'name': name,
       'enabled': True,
       'date_added': int(time.time()),
+      'last_active': None,
       'time_total': 0,
       'tags':[],
       }
@@ -94,32 +96,36 @@ def get_name(name):
   names = {
     'disable_menu':'Hide menu',
     'set_timezone':'Set timezone',
+    'task_stats':'Show stats',
     'menu_main':'Main menu',
     'menu_edit':'Editing menu',
     'menu_settings':'Settings',
-    'task_stats':'Show stats',
-
-    'start_task':'Start task',
-    'add_task':'Add task',
-    'remove_task':'Disable task',
-    'enable_task':'Enable task',
-    'change_description': 'Change description',
+    'menu_edit_tasks':'Edit tasks',
+    'menu_edit_places':'Edit places',
+    'menu_edit_tags':'Edit tags',
 
     'stop':'Stop ',
     'now':'Now',
     'show_disabled':'Show disabled',
     'show_enabled':'Show enabled',
 
+    'start_task':'Start task',
+    'add_task':'Add task',
+    'remove_task':'Disable task',
+    'enable_task':'Enable task',
+    'task_tags':'Task tags',
+    'task_tags':'Task tags',
+    'change_description': 'Change description',
+
     'change_place':'Place: ',
     'add_place':'Add place',
     'disable_place':'Disable place',
     'enable_place':'Enable place',
+    'place_tags':'Place tags',
 
     'add_tag':'Add tag',
     'disable_tag':'Disable tag',
     'enable_tag':'Enable tag',
-    'task_tags':'Task tags',
-    'place_tags':'Place tags',
     }
   return names[name]
 
