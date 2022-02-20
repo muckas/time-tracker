@@ -873,11 +873,14 @@ def get_stats(users, user_id, option=None):
 
 def get_descriptions_reply_markup(users, user_id, task_id):
   keyboard = []
+  max_inline_descriptions = 3
   i = 0
   for description in users[user_id]['tasks'][task_id]['descriptions']:
+    if i == max_inline_descriptions:
+      break
     keyboard += [InlineKeyboardButton(description, callback_data = f'description:{i}')],
     i += 1
-  keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
+  # keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
   reply_markup = InlineKeyboardMarkup(keyboard)
   return reply_markup
 
@@ -902,7 +905,7 @@ def handle_description_query(users, user_id, query):
     return 'No active task', None
 
 def add_description(users, user_id, description):
-  max_descriptions = 3
+  max_descriptions = 99
   task_id = users[user_id]['active_task']['id']
   if description in users[user_id]['tasks'][task_id]['descriptions']:
     users[user_id]['tasks'][task_id]['descriptions'].remove(description)
