@@ -142,16 +142,61 @@ def get_main_menu(users, user_id):
   elif menu_state == 'menu_edit':
     keyboard = [
         [
+          constants.get_name('menu_edit_tasks'),
+          constants.get_name('menu_edit_places'),
+        ],
+        [
+          constants.get_name('menu_edit_tags'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
+
+  elif menu_state == 'menu_edit_tasks':
+    keyboard = [
+        [
           constants.get_name('add_task'),
-          constants.get_name('enable_task'),
-          constants.get_name('remove_task'),
           constants.get_name('task_tags'),
         ],
         [
+          constants.get_name('enable_task'),
+          constants.get_name('remove_task'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
+
+  elif menu_state == 'menu_edit_places':
+    keyboard = [
+        [
           constants.get_name('add_place'),
+          constants.get_name('place_tags'),
+        ],
+        [
           constants.get_name('enable_place'),
           constants.get_name('disable_place'),
-          constants.get_name('place_tags'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
+
+  elif menu_state == 'menu_edit_tags':
+    keyboard = [
+        [
+          constants.get_name('add_tag'),
+        ],
+        [
+          constants.get_name('enable_tag'),
+          constants.get_name('disable_tag'),
         ],
         [
           constants.get_name('menu_main'),
@@ -1257,6 +1302,18 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('menu_settings'):
       change_menu_state(users, user_id, 'menu_settings')
       tgbot.send_message(user_id, 'Settings', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_edit_tasks'):
+      change_menu_state(users, user_id, 'menu_edit_tasks')
+      tgbot.send_message(user_id, 'Editing tasks', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_edit_places'):
+      change_menu_state(users, user_id, 'menu_edit_places')
+      tgbot.send_message(user_id, 'Editing places', keyboard=get_main_menu(users, user_id))
+
+    elif button_name == constants.get_name('menu_edit_tags'):
+      change_menu_state(users, user_id, 'menu_edit_tags')
+      tgbot.send_message(user_id, 'Editing tags', keyboard=get_main_menu(users, user_id))
 
     elif button_name == constants.get_name('set_timezone'):
       tgbot.send_message(user_id, 'Send hour offset for UTC\nValid range (-12...+14)\n/cancel', keyboard=[])
