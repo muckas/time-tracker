@@ -715,39 +715,41 @@ def get_stats(users, user_id, option=None):
     temp_vars[user_id]['stats_info'] = stats_info
   elif option == 'alltime':
     stats_type = 'alltime'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'detailed':
     stats_type = 'detailed'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'year':
     stats_type = 'year'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'month':
     stats_type = 'month'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'day':
     stats_type = 'day'
-    stats_delta = 0
-    temp_vars[user_id]['stats_delta'] = 0
     users[user_id]['stats_type'] = stats_type
     db.write('users', users)
   elif option == 'left':
-    stats_delta += 1
+    if stats_type == 'day':
+      stats_delta += 1
+    elif stats_type == 'month':
+      stats_delta += 30
+    elif stats_type == 'year':
+      stats_delta += 365
     temp_vars[user_id]['stats_delta'] = stats_delta
-  elif option == 'right' and stats_delta > 0:
-    stats_delta -= 1
+  elif option == 'right':
+    if stats_type == 'day':
+      stats_delta -= 1
+    elif stats_type == 'month':
+      stats_delta -= 30
+    elif stats_type == 'year':
+      stats_delta -= 365
+    if stats_delta < 0:
+      stats_delta = 0
     temp_vars[user_id]['stats_delta'] = stats_delta
 
   if stats_info == 'tasks':
@@ -804,7 +806,7 @@ def get_stats(users, user_id, option=None):
     return report, reply_markup
 
   elif stats_type == 'year':
-    timedelta = datetime.timedelta(days=365 * stats_delta)
+    timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Year statistics: {date.year}\n--------------------'
@@ -840,7 +842,7 @@ def get_stats(users, user_id, option=None):
     return report, reply_markup
 
   elif stats_type == 'month':
-    timedelta = datetime.timedelta(days=30 * stats_delta)
+    timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{stats_info[:-1]}-totals-{user_id}'
     report = f'Month statistics: {date.year}-{date.month}\n--------------------'
