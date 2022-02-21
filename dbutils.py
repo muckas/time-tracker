@@ -320,13 +320,13 @@ def generate_task_totals(force, dry_run):
 class DButils(object):
   """Database utility"""
 
-  def update_task_lists(self, dry_run=False):
-    '''
-    Task list update (v0.10.0)
-    :param dry_run: Do not write changes
-    '''
-    db.archive('update_task_lists')
-    update_task_lists(dry_run)
+  # def update_task_lists(self, dry_run=False):
+  #   '''
+  #   Task list update (v0.10.0)
+  #   :param dry_run: Do not write changes
+  #   '''
+  #   db.archive('update_task_lists')
+  #   update_task_lists(dry_run)
 
   # def generate_task_totals(self, force=False, dry_run=False):
   #   '''

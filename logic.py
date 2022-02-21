@@ -39,6 +39,8 @@ def send_links(users, user_id):
   if web_key:
     text = f'''Tasks calendar:
 {web_path}{web_key}/tasks.ics
+Context calendar:
+{web_path}{web_key}/context.ics
 Places calendar:
 {web_path}{web_key}/places.ics
 '''
@@ -97,6 +99,7 @@ def get_main_menu(users, user_id):
   menu_state = temp_vars[user_id]['menu_state']
   active_task = users[user_id]['active_task']
   active_place = users[user_id]['active_place']
+  active_context = users[user_id]['active_context']
   if menu_state == 'menu_main':
     if active_task:
       task_name = get_name(users, user_id, 'task', active_task['id'])
@@ -110,10 +113,16 @@ def get_main_menu(users, user_id):
       change_place_button = f'{constants.get_name("change_place")}{place_name}'
     else:
       change_place_button = constants.get_name('change_place') + 'None'
+    if active_context:
+      context_name = get_name(users, user_id, 'tasks', active_context['id'])
+      change_context_button = f'{constants.get_name("change_context")}{context_name}'
+    else:
+      change_context_button = constants.get_name('change_context') + 'None'
     keyboard = [
         task_line,
         [
-          change_place_button
+          change_place_button,
+          change_context_button,
         ],
         [
           constants.get_name('task_stats'),
@@ -319,6 +328,30 @@ def get_all_names(users, user_id, info_type):
     all_entries.append(entry_list[entry_id]['name'])
   return all_entries
 
+def get_entry_ids_with_tags(users, user_id, info_type, tags=[]):
+  if info_type in ('task', 'tasks',):
+    entry_list = users[user_id]['tasks']
+  elif info_type in ('place', 'places',):
+    entry_list = users[user_id]['places']
+  elif info_type in ('all',):
+    entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
+  tag_ids = []
+  for tag_name in tags:
+    tag_ids.append(get_tag_id(users, user_id, tag_name))
+  entries = []
+  for entry_id in entry_list:
+    entry_tags = get_entry_tags(users, user_id, entry_id)
+    if len(set(entry_tags).intersection(tag_ids)) > 0:
+      entries.append(entry_id)
+  return entries
+
+def get_entry_names_with_tags(users, user_id, info_type, tags=[]):
+  entries = get_entry_ids_with_tags(users, user_id, info_type, tags)
+  entry_names = []
+  for entry_id in entries:
+    entry_names.append(get_name(users, user_id, info_type, entry_id))
+  return entry_names
+
 def get_entry_tags(users, user_id, entry_id):
   if entry_id in users[user_id]['tasks'].keys():
     return users[user_id]['tasks'][entry_id]['tags']
@@ -383,11 +416,16 @@ def add_task(users, user_id, task_name, enabled=True):
     db.write('users', users)
     return f'Added task "{task_name}"'
 
-def stop_task(users, user_id, task_id, time_text):
+def stop_task(users, user_id, task_id, time_text, context=False):
   task_name = get_name(users, user_id, 'task', task_id)
-  temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None, 'task_description':None})
-  task_start_time = users[user_id]['active_task']['start_time']
-  task_description = users[user_id]['active_task']['description']
+  if context:
+    temp_vars[user_id].update({'context_name':None})
+    task_start_time = users[user_id]['active_context']['start_time']
+    task_description = users[user_id]['active_context']['description']
+  else:
+    temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None, 'task_description':None})
+    task_start_time = users[user_id]['active_task']['start_time']
+    task_description = users[user_id]['active_task']['description']
   # Retroactive task stopping
   if time_text == constants.get_name('now'):
     task_end_time = int(time.time())
@@ -395,7 +433,10 @@ def stop_task(users, user_id, task_id, time_text):
     time_interval = convert_interval_to_seconds(time_text)
     if time_interval:
       if int(time.time()) - time_interval <= task_start_time:
-        users[user_id]['active_task'] = None
+        if context:
+          users[user_id]['active_context'] = None
+        else:
+          users[user_id]['active_task'] = None
         db.write('users',users)
         return 'None'
       else:
@@ -403,22 +444,28 @@ def stop_task(users, user_id, task_id, time_text):
     else:
       return None
   timezone = users[user_id]['timezone']
-  write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone)
+  write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone, context=context)
   # Updating task info in users.json
-  users[user_id]['last_task_end_time'] = task_end_time
+  if context:
+    users[user_id]['last_context_end_time'] = task_end_time
+    users[user_id]['active_context'] = None
+  else:
+    users[user_id]['last_task_end_time'] = task_end_time
+    users[user_id]['active_task'] = None
   task_duration_sec = task_end_time - task_start_time
   task_duration = datetime.timedelta(seconds=task_duration_sec)
-  users[user_id]['active_task'] = None
   users[user_id]['tasks'][task_id]['last_active'] = task_end_time
   users[user_id]['tasks'][task_id]['time_total'] += task_duration_sec
   db.write('users',users)
   return task_duration
 
-def write_task_to_diary(users, user_id, task_id, task_description, start_time, end_time, timezone, totals_obj=None):
+def write_task_to_diary(users, user_id, task_id, task_description,
+                       start_time, end_time, timezone, context=False, totals_obj=None
+                       ):
   if not totals_obj:
     event_id = str(uuid.uuid4())
-    write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time)
-    write_to_task_ical(users, user_id, event_id, task_id, task_description, start_time, end_time)
+    write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time, context=context)
+    write_to_task_ical(users, user_id, event_id, task_id, task_description, start_time, end_time, context=context)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -433,16 +480,26 @@ def write_task_to_diary(users, user_id, task_id, task_description, start_time, e
     update_task_totals(users, user_id, task_id, start_date.timestamp(), temp_end_date.timestamp(), totals_obj)
     start_date = temp_end_date + one_second
 
-def write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time):
-  task_list_filename = f'tasks-{user_id}'
+def write_to_task_list(user_id, event_id, task_id, task_description,
+                      timezone, start_time, end_time, context=True
+                      ):
+  if context:
+    task_list_filename = f'context-{user_id}'
+  else:
+    task_list_filename = f'tasks-{user_id}'
   task_list_path = os.path.join('data', user_id, task_list_filename)
   task_list = db.read(task_list_path)
   if not task_list: task_list = {}
   task_list[event_id] = constants.get_default_list_task(task_id, task_description, timezone, start_time, end_time)
   db.write(task_list_path, task_list)
 
-def write_to_task_ical(users, user_id, event_id, task_id, task_description, start_time, end_time, ical_obj=None):
-  calendar_name = f'tasks-calendar-{user_id}.ics'
+def write_to_task_ical(users, user_id, event_id, task_id, task_description,
+                      start_time, end_time, context=False, ical_obj=None
+                      ):
+  if context:
+    calendar_name = f'context-calendar-{user_id}.ics'
+  else:
+    calendar_name = f'tasks-calendar-{user_id}.ics'
   calendar_path = os.path.join('db', 'data', user_id, calendar_name)
   timezone = users[user_id]['timezone']
   if ical_obj:
@@ -453,7 +510,10 @@ def write_to_task_ical(users, user_id, event_id, task_id, task_description, star
       cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
     else:
       log.debug(f'Making new calendar')
-      cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
+      if context:
+        cal = constants.get_new_calendar('Time-Tracker: Context', timezone)
+      else:
+        cal = constants.get_new_calendar('Time-Tracker: Tasks', timezone)
   task_duration = end_time - start_time
   if task_duration < 60 * 60:
     task_duration /= 60
@@ -1163,6 +1223,71 @@ def menu_handler(user_id, text):
       tgbot.send_message(user_id, f'Task "{task_name}" does not exist', keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
 
+  # STATE - start_context
+  elif state == 'start_context':
+    # Retroactive context starting
+    if text == constants.get_name('now'):
+      start_time = int(time.time())
+    else:
+      time_interval = convert_interval_to_seconds(text)
+      if time_interval:
+        start_time = max(int(time.time()) - time_interval, users[user_id]['last_context_end_time'])
+      else:
+        tgbot.send_message(user_id, f'Incorrect time "{text}"', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
+        return
+
+    context_name = temp_vars[user_id]['context_name']
+    context_id = get_id(users, user_id, 'tasks', context_name)
+    if not context_id:
+      tgbot.send_message(user_id, f'Incorrect context name', keyboard=get_main_menu(users, user_id))
+      change_state(users, user_id, 'main_menu')
+    users[user_id]['active_context'] = {
+        'id': context_id,
+        'start_time':start_time,
+        'description':''
+        }
+    db.write('users',users)
+    # reply_markup = get_descriptions_reply_markup(users, user_id, task_id) ### Context description
+    time_since_start = datetime.timedelta(seconds= int(time.time())-int(start_time) )
+    tgbot.send_message(user_id,
+        f'Context: {context_name}\n{time_since_start}', 
+        keyboard=get_main_menu(users, user_id),
+        )
+    # tgbot.send_message(user_id, ### Context description
+    #     f'No description', 
+    #     reply_markup=reply_markup
+    #     )
+    change_state(users, user_id, 'main_menu')
+
+  # STATE - start_context_time
+  if state == 'start_context_time':
+    context_name = text
+    temp_vars[user_id].update({'context_name':context_name})
+    keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
+    tgbot.send_message(user_id, f'When to start {context_name}?\n/cancel', keyboard=keyboard)
+    change_state(users, user_id, 'start_context')
+
+  # STATE - stop_context
+  elif state == 'stop_context':
+    time_interval = text
+    if users[user_id]['active_context']:
+      context_id = users[user_id]['active_context']['id']
+      context_name = get_name(users, user_id, 'tasks', context_id)
+      context_duration = stop_task(users, user_id, context_id, time_interval, context=True)
+      if context_duration != None:
+        tgbot.send_message(
+            user_id,
+            f'Stopped {context_name}\nTime taken: {context_duration}',
+            keyboard=get_main_menu(users, user_id)
+            )
+        change_state(users, user_id, 'main_menu')
+      else:
+        tgbot.send_message(user_id, f'Incorrect time "{text}"', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
+    else:
+      tgbot.send_message(user_id, f'No context is active', keyboard=get_main_menu(users, user_id))
+
   # STATE - change_place
   elif state == 'change_place':
     # Retroactive place changing
@@ -1448,11 +1573,30 @@ def menu_handler(user_id, text):
     else: 
       stop_string = constants.get_name('stop')
       stop_string_len = len(stop_string)
+      context_string = constants.get_name('change_context')
+      context_string_len = len(context_string)
       place_string = constants.get_name('change_place')
       place_string_len = len(place_string)
 
+      # Button change_context
+      if button_name[:context_string_len] == context_string:
+        contexts = get_entry_names_with_tags(users, user_id, 'tasks', ['context'])
+        if contexts:
+          if users[user_id]['active_context']:
+            context_id = users[user_id]['active_context']['id']
+            context_name = get_name(users, user_id, 'task', context_id)
+            keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
+            tgbot.send_message(user_id, f'When to stop {context_name}?\n/cancel', keyboard=keyboard)
+            change_state(users, user_id, 'stop_context')
+          else:
+            keyboard = get_options_keyboard(contexts, columns=3)
+            tgbot.send_message(user_id, 'Choose a context to activate\n/cancel', keyboard=keyboard)
+            change_state(users, user_id, 'start_context_time')
+        else:
+          tgbot.send_message(user_id, 'You don\'t have any tasks tagged with "context"')
+
       # Button change_place
-      if button_name[:place_string_len] == place_string:
+      elif button_name[:place_string_len] == place_string:
         places = get_enabled_names(users, user_id, 'place')
         if places:
           if users[user_id]['active_place']:
