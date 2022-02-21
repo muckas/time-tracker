@@ -57,14 +57,29 @@ def generate_new_key(users, user_id, string):
   log.debug(f'Generated new key for user {user_id}')
   send_links(users, user_id)
 
-def update_timer(user_id, message, start_time, task_name, task_description):
-  timer = int(time.time()) - start_time
-  timer = datetime.timedelta(seconds=timer)
-  if task_description:
-    description = f'\n{task_description}'
-  else:
-    description = f''
-  text = f'{timer}\n{task_name}{description}'
+def update_timer(user_id):
+  task_name = ''
+  task_description = ''
+  task_start = ''
+  task_timer = ''
+  context_name = ''
+  context_description = ''
+  context_start = ''
+  context_timer = ''
+  message = temp_vars[user_id]['timer_message']
+  if temp_vars[user_id]['task_name']:
+    task_name = temp_vars[user_id]['task_name']
+    task_description = temp_vars[user_id]['task_description']
+    task_start = temp_vars[user_id]['task_start']
+    task_timer = int(time.time()) - task_start
+    task_timer = datetime.timedelta(seconds=task_timer)
+  if temp_vars[user_id]['context_name']:
+    context_name = temp_vars[user_id]['context_name']
+    context_description = temp_vars[user_id]['context_description']
+    context_start = temp_vars[user_id]['context_start']
+    context_timer = int(time.time()) - context_start
+    context_timer = datetime.timedelta(seconds=context_timer)
+  text = f'{task_timer}\n{task_name}\n{task_description}\n{context_timer}\n{context_name}\n{context_description}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
@@ -72,26 +87,37 @@ def update_timer(user_id, message, start_time, task_name, task_description):
 def update_all_timers():
   for user_id in temp_vars:
     message = temp_vars[user_id]['timer_message']
-    start_time = temp_vars[user_id]['timer_start']
     task_name = temp_vars[user_id]['task_name']
-    task_description = temp_vars[user_id]['task_description']
-    if message and start_time and task_name:
-      update_timer(user_id, message, start_time, task_name, task_description)
+    context_name = temp_vars[user_id]['context_name']
+    if message and (task_name or context_name):
+      update_timer(user_id)
 
 def get_new_timer(user_id, notify=True):
   users = db.read('users')
-  if users[user_id]['active_task']:
+  active_task = users[user_id]['active_task']
+  active_context = users[user_id]['active_context']
+  if active_task or active_context:
+    if active_task:
+      task_name = get_name(users, user_id, 'task', active_task['id'])
+      task_description = active_task['description']
+      task_start = active_task['start_time']
+      temp_vars[user_id].update({
+        'task_start':task_start,
+        'task_name':task_name,
+        'task_description':task_description
+        })
+    if active_context:
+      context_name = get_name(users, user_id, 'task', active_context['id'])
+      context_description = active_context['description']
+      context_start = active_context['start_time']
+      temp_vars[user_id].update({
+        'context_start':context_start,
+        'context_name':context_name,
+        'context_description':context_description
+        })
     message = tgbot.send_message(user_id, 'Timer')
-    task_name = get_name(users, user_id, 'task', users[user_id]['active_task']['id'])
-    task_description = users[user_id]['active_task']['description']
-    start_time = users[user_id]['active_task']['start_time']
-    temp_vars[user_id].update({
-      'timer_message':message,
-      'timer_start':start_time,
-      'task_name':task_name,
-      'task_description':task_description
-      })
-    update_timer(user_id, message, start_time, task_name, task_description)
+    temp_vars[user_id].update({'timer_message':message})
+    update_timer(user_id)
   elif notify:
     tgbot.send_message(user_id, 'No task is active')
 
@@ -419,11 +445,11 @@ def add_task(users, user_id, task_name, enabled=True):
 def stop_task(users, user_id, task_id, time_text, context=False):
   task_name = get_name(users, user_id, 'task', task_id)
   if context:
-    temp_vars[user_id].update({'context_name':None})
+    temp_vars[user_id].update({'context_start':None, 'context_name':None, 'context_description':None})
     task_start_time = users[user_id]['active_context']['start_time']
     task_description = users[user_id]['active_context']['description']
   else:
-    temp_vars[user_id].update({'timer_message':None, 'timer_start':None, 'task_name':None, 'task_description':None})
+    temp_vars[user_id].update({'task_start':None, 'task_name':None, 'task_description':None})
     task_start_time = users[user_id]['active_task']['start_time']
     task_description = users[user_id]['active_task']['description']
   # Retroactive task stopping
@@ -1159,9 +1185,7 @@ def menu_handler(user_id, text):
         reply_markup=reply_markup
         )
     change_state(users, user_id, 'main_menu')
-    message = tgbot.send_message(user_id, f'Timer')
-    update_timer(user_id, message, start_time, task_name, '')
-    temp_vars[user_id].update({'timer_message':message, 'timer_start':start_time})
+    get_new_timer(user_id)
 
   # STATE - start_task_time
   if state == 'start_task_time':
@@ -1249,9 +1273,8 @@ def menu_handler(user_id, text):
         }
     db.write('users',users)
     # reply_markup = get_descriptions_reply_markup(users, user_id, task_id) ### Context description
-    time_since_start = datetime.timedelta(seconds= int(time.time())-int(start_time) )
     tgbot.send_message(user_id,
-        f'Context: {context_name}\n{time_since_start}', 
+        f'Context: {context_name}', 
         keyboard=get_main_menu(users, user_id),
         )
     # tgbot.send_message(user_id, ### Context description
@@ -1259,6 +1282,7 @@ def menu_handler(user_id, text):
     #     reply_markup=reply_markup
     #     )
     change_state(users, user_id, 'main_menu')
+    get_new_timer(user_id)
 
   # STATE - start_context_time
   if state == 'start_context_time':
