@@ -12,6 +12,7 @@ def get_temp_vars():
       'timer_start':None,
       'stats_delta':0,
       'stats_info':'tasks',
+      'context_name':None,
       'place_name':None,
       'tag_editor_entry_id':None,
       'tag_editor_active_tags':[],
@@ -23,6 +24,8 @@ def get_default_user(tg_username):
       'timezone':None,
       'last_task_end_time':int(time.time()),
       'active_task':{},
+      'last_context_end_time':int(time.time()),
+      'active_context':{},
       'last_place_end_time':int(time.time()),
       'active_place':{},
       'stats_type':'detailed',
@@ -114,8 +117,9 @@ def get_name(name):
     'remove_task':'Disable task',
     'enable_task':'Enable task',
     'task_tags':'Task tags',
-    'task_tags':'Task tags',
     'change_description': 'Change description',
+
+    'change_context':'Context: ',
 
     'change_place':'Place: ',
     'add_place':'Add place',
