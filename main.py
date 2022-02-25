@@ -13,7 +13,7 @@ import traceback
 import tgbot
 import logic
 
-VERSION = '0.15.1'
+VERSION = '0.16.0'
 NAME = 'Time Tracker'
 
 # Logger setup
