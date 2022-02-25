@@ -67,13 +67,13 @@ def update_timer(user_id):
   context_start = ''
   context_timer = ''
   message = temp_vars[user_id]['timer_message']
-  if temp_vars[user_id]['task_name']:
+  if temp_vars[user_id]['task_name'] and temp_vars[user_id]['task_start']:
     task_name = temp_vars[user_id]['task_name']
     task_description = temp_vars[user_id]['task_description']
     task_start = temp_vars[user_id]['task_start']
     task_timer = int(time.time()) - task_start
     task_timer = datetime.timedelta(seconds=task_timer)
-  if temp_vars[user_id]['context_name']:
+  if temp_vars[user_id]['context_name'] and temp_vars[user_id]['context_start']:
     context_name = temp_vars[user_id]['context_name']
     context_description = temp_vars[user_id]['context_description']
     context_start = temp_vars[user_id]['context_start']
@@ -88,8 +88,10 @@ def update_all_timers():
   for user_id in temp_vars:
     message = temp_vars[user_id]['timer_message']
     task_name = temp_vars[user_id]['task_name']
+    task_start = temp_vars[user_id]['task_start']
     context_name = temp_vars[user_id]['context_name']
-    if message and (task_name or context_name):
+    context_start = temp_vars[user_id]['context_start']
+    if message and ((task_name and task_start) or (context_name and context_start)):
       update_timer(user_id)
 
 def get_new_timer(user_id, notify=True):
