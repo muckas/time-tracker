@@ -122,6 +122,7 @@ def get_name(name):
     'change_description': 'Change description',
 
     'change_context':'Context: ',
+    'no_context':'No context',
 
     'change_place':'Place: ',
     'add_place':'Add place',

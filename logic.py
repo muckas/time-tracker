@@ -68,18 +68,18 @@ def update_timer(user_id):
   context_timer = ''
   message = temp_vars[user_id]['timer_message']
   if temp_vars[user_id]['task_name'] and temp_vars[user_id]['task_start']:
-    task_name = temp_vars[user_id]['task_name']
-    task_description = temp_vars[user_id]['task_description']
+    task_name = '\n' + temp_vars[user_id]['task_name']
+    task_description = '\n' + temp_vars[user_id]['task_description']
     task_start = temp_vars[user_id]['task_start']
     task_timer = int(time.time()) - task_start
     task_timer = datetime.timedelta(seconds=task_timer)
   if temp_vars[user_id]['context_name'] and temp_vars[user_id]['context_start']:
-    context_name = temp_vars[user_id]['context_name']
-    context_description = temp_vars[user_id]['context_description']
+    context_name = '\n' + temp_vars[user_id]['context_name']
+    context_description = '\n' + temp_vars[user_id]['context_description']
     context_start = temp_vars[user_id]['context_start']
     context_timer = int(time.time()) - context_start
     context_timer = datetime.timedelta(seconds=context_timer)
-  text = f'{task_timer}\n{task_name}\n{task_description}\n{context_timer}\n{context_name}\n{context_description}'
+  text = f'{task_timer}{task_name}{task_description}\n---------------\n{context_timer}{context_name}{context_description}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
@@ -145,7 +145,7 @@ def get_main_menu(users, user_id):
       context_name = get_name(users, user_id, 'tasks', active_context['id'])
       change_context_button = f'{constants.get_name("change_context")}{context_name}'
     else:
-      change_context_button = constants.get_name('change_context') + 'None'
+      change_context_button = constants.get_name('no_context')
     keyboard = [
         task_line,
         [
@@ -1220,6 +1220,8 @@ def menu_handler(user_id, text):
       task_duration = stop_task(users, user_id, task_id, time_interval)
       if task_duration != None:
         tgbot.send_message(user_id, f'Stopped {task_name}\nTime taken: {task_duration}', keyboard=get_main_menu(users, user_id))
+        if users[user_id]['active_context']:
+          get_new_timer(user_id, notify=False)
         change_state(users, user_id, 'main_menu')
       else:
         tgbot.send_message(user_id, f'Incorrect time "{text}"', keyboard=get_main_menu(users, user_id))
@@ -1307,6 +1309,8 @@ def menu_handler(user_id, text):
             f'Stopped {context_name}\nTime taken: {context_duration}',
             keyboard=get_main_menu(users, user_id)
             )
+        if users[user_id]['active_task']:
+          get_new_timer(user_id, notify=False)
         change_state(users, user_id, 'main_menu')
       else:
         tgbot.send_message(user_id, f'Incorrect time "{text}"', keyboard=get_main_menu(users, user_id))
@@ -1604,8 +1608,8 @@ def menu_handler(user_id, text):
       place_string = constants.get_name('change_place')
       place_string_len = len(place_string)
 
-      # Button change_context
-      if button_name[:context_string_len] == context_string:
+      # Button change_context or no_context
+      if button_name[:context_string_len] == context_string or button_name == constants.get_name('no_context'):
         contexts = get_entry_names_with_tags(users, user_id, 'tasks', ['context'])
         if contexts:
           if users[user_id]['active_context']:
