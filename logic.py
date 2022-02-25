@@ -132,10 +132,8 @@ def get_main_menu(users, user_id):
     if active_task:
       task_name = get_name(users, user_id, 'task', active_task['id'])
       start_task_button = f'{constants.get_name("stop")}{task_name}'
-      task_line = [start_task_button, constants.get_name('change_description'),]
     else:
       start_task_button = constants.get_name('start_task')
-      task_line = [start_task_button,]
     if active_place:
       place_name = get_name(users, user_id, 'place', active_place['id'])
       change_place_button = f'{constants.get_name("change_place")}{place_name}'
@@ -147,19 +145,38 @@ def get_main_menu(users, user_id):
     else:
       change_context_button = constants.get_name('no_context')
     keyboard = [
-        task_line,
+        [
+          start_task_button,
+        ],
         [
           change_place_button,
           change_context_button,
         ],
         [
           constants.get_name('task_stats'),
+          constants.get_name('menu_ext'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings')
         ],
       ]
     if users[user_id]['timezone'] == None:
       keyboard[0] = [constants.get_name('set_timezone')]
+
+  elif menu_state == 'menu_ext':
+    keyboard = [
+        [
+          constants.get_name('task_description'),
+        ],
+        [
+          constants.get_name('context_description'),
+        ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('get_timer'),
+          constants.get_name('menu_edit'),
+          constants.get_name('disable_menu'),
+        ],
+      ]
 
   elif menu_state == 'menu_settings':
     keyboard = [
@@ -171,6 +188,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
+          constants.get_name('menu_ext'),
           constants.get_name('menu_edit'),
           constants.get_name('disable_menu'),
         ],
@@ -187,6 +205,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
+          constants.get_name('menu_ext'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -204,6 +223,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
+          constants.get_name('menu_ext'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -221,6 +241,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
+          constants.get_name('menu_ext'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -237,6 +258,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
+          constants.get_name('menu_ext'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -1049,25 +1071,32 @@ def handle_description_query(users, user_id, query):
     except ValueError:
       if query == 'new':
         tgbot.send_message(user_id, 'Type new description\n/cancel', keyboard=[])
-        change_state(users, user_id, 'new_description')
+        change_state(users, user_id, 'new_task_description')
       return 'New description', None
   else:
     return 'No active task', None
 
-def add_description(users, user_id, description):
+def add_description(users, user_id, description, entry_type):
   max_descriptions = 99
-  task_id = users[user_id]['active_task']['id']
-  if description in users[user_id]['tasks'][task_id]['descriptions']:
-    users[user_id]['tasks'][task_id]['descriptions'].remove(description)
-    users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
+  if entry_type == 'task':
+    entry_id = users[user_id]['active_task']['id']
+  elif entry_type == 'context':
+    entry_id = users[user_id]['active_context']['id']
+  if description in users[user_id]['tasks'][entry_id]['descriptions']:
+    users[user_id]['tasks'][entry_id]['descriptions'].remove(description)
+    users[user_id]['tasks'][entry_id]['descriptions'].insert(0, description)
   else:
-    users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
-    while len(users[user_id]['tasks'][task_id]['descriptions']) > max_descriptions:
-      users[user_id]['tasks'][task_id]['descriptions'].pop(-1)
-  users[user_id]['active_task']['description'] = description
-  temp_vars[user_id]['task_description'] = description
+    users[user_id]['tasks'][entry_id]['descriptions'].insert(0, description)
+    while len(users[user_id]['tasks'][entry_id]['descriptions']) > max_descriptions:
+      users[user_id]['tasks'][entry_id]['descriptions'].pop(-1)
+  if entry_type == 'task':
+    users[user_id]['active_task']['description'] = description
+    temp_vars[user_id]['task_description'] = description
+  elif entry_type == 'context':
+    users[user_id]['active_context']['description'] = description
+    temp_vars[user_id]['context_description'] = description
   db.write('users', users)
-  return f'Current task: {get_name(users, user_id, "task", task_id)}\nDescription: {description}'
+  return f'Current {entry_type}: {get_name(users, user_id, "task", entry_id)}\nDescription: {description}'
 
 def get_tags_reply_markup(users, user_id, entry_id):
   entry_name = get_name(users, user_id, 'all', entry_id)
@@ -1144,9 +1173,16 @@ def menu_handler(user_id, text):
   users = db.read('users')
   state = temp_vars[user_id]['state']
 
-  # STATE - new_description
-  if state == 'new_description':
-    reply = add_description(users, user_id, text)
+  # STATE - new_task_description
+  if state == 'new_task_description':
+    reply = add_description(users, user_id, text, 'task')
+    tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
+    change_state(users, user_id, 'main_menu')
+    get_new_timer(user_id)
+
+  # STATE - new_context_description
+  elif state == 'new_context_description':
+    reply = add_description(users, user_id, text, 'context')
     tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
     get_new_timer(user_id)
@@ -1467,6 +1503,10 @@ def menu_handler(user_id, text):
       change_menu_state(users, user_id, 'menu_main')
       tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
 
+    elif button_name == constants.get_name('menu_ext'):
+      change_menu_state(users, user_id, 'menu_ext')
+      tgbot.send_message(user_id, 'Extended menu', keyboard=get_main_menu(users, user_id))
+
     elif button_name == constants.get_name('menu_edit'):
       change_menu_state(users, user_id, 'menu_edit')
       tgbot.send_message(user_id, 'Editing menu', keyboard=get_main_menu(users, user_id))
@@ -1491,14 +1531,27 @@ def menu_handler(user_id, text):
       tgbot.send_message(user_id, 'Send hour offset for UTC\nValid range (-12...+14)\n/cancel', keyboard=[])
       change_state(users, user_id, 'set_timezone')
 
-    elif button_name == constants.get_name('change_description'):
+    elif button_name == constants.get_name('get_timer'):
+      get_new_timer(user_id)
+
+    elif button_name == constants.get_name('task_description'):
       if users[user_id]['active_task']:
         task_id = users[user_id]['active_task']['id']
         descriptions = users[user_id]['tasks'][task_id]['descriptions']
-        tgbot.send_message(user_id, 'Change description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
-        change_state(users, user_id, 'new_description')
+        tgbot.send_message(user_id, 'Task description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
+        change_state(users, user_id, 'new_task_description')
       else:
         tgbot.send_message(user_id, 'No active task', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
+
+    elif button_name == constants.get_name('context_description'):
+      if users[user_id]['active_context']:
+        context_id = users[user_id]['active_context']['id']
+        descriptions = users[user_id]['tasks'][context_id]['descriptions']
+        tgbot.send_message(user_id, 'Context description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
+        change_state(users, user_id, 'new_context_description')
+      else:
+        tgbot.send_message(user_id, 'No active context', keyboard=get_main_menu(users, user_id))
         change_state(users, user_id, 'main_menu')
 
     elif button_name == constants.get_name('start_task'):
