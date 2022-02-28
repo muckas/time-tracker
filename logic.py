@@ -79,7 +79,16 @@ def update_timer(user_id):
     context_start = temp_vars[user_id]['context_start']
     context_timer = int(time.time()) - context_start
     context_timer = datetime.timedelta(seconds=context_timer)
-  text = f'{task_timer}{task_name}{task_description}\n---------------\n{context_timer}{context_name}{context_description}'
+  emoji = ''
+  if temp_vars[user_id]['context_start']:
+    emoji = '\U00002b55 '
+  if temp_vars[user_id]['task_start']:
+    emoji = '\U0001F534 '
+  text = f'{emoji}\n'
+  text += f'{task_timer}{task_name}{task_description}'
+  if task_start:
+    text += '\n---------------\n'
+  text += f'{context_timer}{context_name}{context_description}'
   with suppress(telegram.error.BadRequest):
     message.edit_text(text)
   # log.debug(f'Updated timer for user {user_id}: {text}')
@@ -153,8 +162,8 @@ def get_main_menu(users, user_id):
           change_context_button,
         ],
         [
-          constants.get_name('task_stats'),
           constants.get_name('menu_ext'),
+          constants.get_name('menu_stats'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings')
         ],
@@ -172,9 +181,25 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
-          constants.get_name('get_timer'),
+          constants.get_name('menu_stats'),
           constants.get_name('menu_edit'),
-          constants.get_name('disable_menu'),
+          constants.get_name('menu_settings'),
+        ],
+      ]
+
+  elif menu_state == 'menu_stats':
+    keyboard = [
+        [
+          constants.get_name('entry_stats'),
+        ],
+        # [
+        #   constants.get_name('tag_stats'),
+        # ],
+        [
+          constants.get_name('menu_main'),
+          constants.get_name('menu_stats'),
+          constants.get_name('menu_edit'),
+          constants.get_name('menu_settings'),
         ],
       ]
 
@@ -188,7 +213,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
-          constants.get_name('menu_ext'),
+          constants.get_name('menu_stats'),
           constants.get_name('menu_edit'),
           constants.get_name('disable_menu'),
         ],
@@ -205,7 +230,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
-          constants.get_name('menu_ext'),
+          constants.get_name('menu_stats'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -223,7 +248,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
-          constants.get_name('menu_ext'),
+          constants.get_name('menu_stats'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -241,7 +266,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
-          constants.get_name('menu_ext'),
+          constants.get_name('menu_stats'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -258,7 +283,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('menu_main'),
-          constants.get_name('menu_ext'),
+          constants.get_name('menu_stats'),
           constants.get_name('menu_edit'),
           constants.get_name('menu_settings'),
         ],
@@ -865,9 +890,9 @@ def get_stats(users, user_id, option=None):
     temp_vars[user_id]['stats_delta'] = stats_delta
 
   if stats_info == 'tasks':
-    stats_info_button = [InlineKeyboardButton('Place stats', callback_data='task_stats:places')]
+    stats_info_button = [InlineKeyboardButton('Place stats', callback_data='stats:places')]
   elif stats_info == 'places':
-    stats_info_button = [InlineKeyboardButton('Task stats', callback_data='task_stats:tasks')]
+    stats_info_button = [InlineKeyboardButton('Task stats', callback_data='stats:tasks')]
 
   if stats_type == 'detailed':
     entries = get_all(users, user_id, stats_info)
@@ -899,11 +924,11 @@ def get_stats(users, user_id, option=None):
       Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     keyboard = [
         [
-        InlineKeyboardButton('Day', callback_data='task_stats:day'),
-        InlineKeyboardButton('Month', callback_data='task_stats:month'),
-        InlineKeyboardButton('Year', callback_data='task_stats:year')
+        InlineKeyboardButton('Day', callback_data='stats:day'),
+        InlineKeyboardButton('Month', callback_data='stats:month'),
+        InlineKeyboardButton('Year', callback_data='stats:year')
         ],
-        [InlineKeyboardButton('All time', callback_data='task_stats:alltime')],
+        [InlineKeyboardButton('All time', callback_data='stats:alltime')],
         stats_info_button,
       ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -920,11 +945,11 @@ def get_stats(users, user_id, option=None):
       report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
     keyboard = [
         [
-        InlineKeyboardButton('Day', callback_data='task_stats:day'),
-        InlineKeyboardButton('Month', callback_data='task_stats:month'),
-        InlineKeyboardButton('Year', callback_data='task_stats:year')
+        InlineKeyboardButton('Day', callback_data='stats:day'),
+        InlineKeyboardButton('Month', callback_data='stats:month'),
+        InlineKeyboardButton('Year', callback_data='stats:year')
         ],
-        [InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')],
+        [InlineKeyboardButton('Detailed', callback_data='stats:detailed')],
         stats_info_button,
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -950,16 +975,16 @@ def get_stats(users, user_id, option=None):
       report += f'\nNo data for {date.year}'
     keyboard = [
         [
-          InlineKeyboardButton('Day', callback_data='task_stats:day'),
-          InlineKeyboardButton('Month', callback_data='task_stats:month')
+          InlineKeyboardButton('Day', callback_data='stats:day'),
+          InlineKeyboardButton('Month', callback_data='stats:month')
         ],
         [
-          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
-          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+          InlineKeyboardButton('All time', callback_data='stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='stats:detailed')
         ],
         [
-          InlineKeyboardButton('<', callback_data='task_stats:left'),
-          InlineKeyboardButton('>', callback_data='task_stats:right'),
+          InlineKeyboardButton('<', callback_data='stats:left'),
+          InlineKeyboardButton('>', callback_data='stats:right'),
         ],
         stats_info_button,
       ]
@@ -987,16 +1012,16 @@ def get_stats(users, user_id, option=None):
       report += f'\nNo data for {date.year}-{date.month}'
     keyboard = [
         [
-          InlineKeyboardButton('Day', callback_data='task_stats:day'),
-          InlineKeyboardButton('Year', callback_data='task_stats:year')
+          InlineKeyboardButton('Day', callback_data='stats:day'),
+          InlineKeyboardButton('Year', callback_data='stats:year')
         ],
         [
-          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
-          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+          InlineKeyboardButton('All time', callback_data='stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='stats:detailed')
         ],
         [
-          InlineKeyboardButton('<', callback_data='task_stats:left'),
-          InlineKeyboardButton('>', callback_data='task_stats:right'),
+          InlineKeyboardButton('<', callback_data='stats:left'),
+          InlineKeyboardButton('>', callback_data='stats:right'),
         ],
         stats_info_button,
       ]
@@ -1025,16 +1050,16 @@ def get_stats(users, user_id, option=None):
       report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     keyboard = [
         [
-          InlineKeyboardButton('Month', callback_data='task_stats:month'),
-          InlineKeyboardButton('Year', callback_data='task_stats:year')
+          InlineKeyboardButton('Month', callback_data='stats:month'),
+          InlineKeyboardButton('Year', callback_data='stats:year')
         ],
         [
-          InlineKeyboardButton('All time', callback_data='task_stats:alltime'),
-          InlineKeyboardButton('Detailed', callback_data='task_stats:detailed')
+          InlineKeyboardButton('All time', callback_data='stats:alltime'),
+          InlineKeyboardButton('Detailed', callback_data='stats:detailed')
         ],
         [
-          InlineKeyboardButton('<', callback_data='task_stats:left'),
-          InlineKeyboardButton('>', callback_data='task_stats:right'),
+          InlineKeyboardButton('<', callback_data='stats:left'),
+          InlineKeyboardButton('>', callback_data='stats:right'),
         ],
         stats_info_button,
       ]
@@ -1507,6 +1532,10 @@ def menu_handler(user_id, text):
       change_menu_state(users, user_id, 'menu_ext')
       tgbot.send_message(user_id, 'Extended menu', keyboard=get_main_menu(users, user_id))
 
+    elif button_name == constants.get_name('menu_stats'):
+      change_menu_state(users, user_id, 'menu_stats')
+      tgbot.send_message(user_id, 'Stats menu', keyboard=get_main_menu(users, user_id))
+
     elif button_name == constants.get_name('menu_edit'):
       change_menu_state(users, user_id, 'menu_edit')
       tgbot.send_message(user_id, 'Editing menu', keyboard=get_main_menu(users, user_id))
@@ -1604,7 +1633,7 @@ def menu_handler(user_id, text):
       else:
         tgbot.send_message(user_id, "You have no places")
 
-    elif button_name == constants.get_name('task_stats'):
+    elif button_name == constants.get_name('entry_stats'):
       temp_vars[user_id]['stats_delta'] = 0
       report, reply_markup = get_stats(users ,user_id, users[user_id]['stats_type'])
       tgbot.send_message(user_id, report, reply_markup=reply_markup)

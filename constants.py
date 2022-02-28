@@ -101,10 +101,11 @@ def get_name(name):
   names = {
     'disable_menu':'Hide menu',
     'set_timezone':'Set timezone',
-    'task_stats':'Show stats',
     'get_timer':'Timer',
+
     'menu_main':'Main',
-    'menu_ext':'Ext.',
+    'menu_ext':'Ext',
+    'menu_stats':'Stats',
     'menu_edit':'Editing',
     'menu_settings':'Settings',
     'menu_edit_tasks':'Edit tasks',
@@ -115,6 +116,8 @@ def get_name(name):
     'now':'Now',
     'show_disabled':'Show disabled',
     'show_enabled':'Show enabled',
+
+    'entry_stats':'Total statistics',
 
     'start_task':'Start task',
     'add_task':'Add task',
