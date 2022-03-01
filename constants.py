@@ -15,6 +15,7 @@ def get_temp_vars():
       'context_description':None,
       'stats_delta':0,
       'stats_info':'tasks',
+      'stats_sort':'by-entry',
       'place_name':None,
       'tag_editor_entry_id':None,
       'tag_editor_active_tags':[],
@@ -101,10 +102,11 @@ def get_name(name):
   names = {
     'disable_menu':'Hide menu',
     'set_timezone':'Set timezone',
-    'task_stats':'Show stats',
     'get_timer':'Timer',
+
     'menu_main':'Main',
-    'menu_ext':'Ext.',
+    'menu_ext':'Ext',
+    'menu_stats':'Stats',
     'menu_edit':'Editing',
     'menu_settings':'Settings',
     'menu_edit_tasks':'Edit tasks',
@@ -115,6 +117,9 @@ def get_name(name):
     'now':'Now',
     'show_disabled':'Show disabled',
     'show_enabled':'Show enabled',
+
+    'entry_stats':'Total statistics',
+    'entry_info':'Entry info',
 
     'start_task':'Start task',
     'add_task':'Add task',

@@ -17,15 +17,19 @@ tg = None
 help_text = '''I am sorry, but there's nothing I can help you with...'''
 
 def send_message(user_id, text, silent=True, keyboard=None, reply_markup=None):
-  users = db.read('users')
-  username = users[user_id]['username']
   if keyboard != None:
     if keyboard == []:
       reply_markup = ReplyKeyboardRemove()
     else:
       reply_markup = ReplyKeyboardMarkup(keyboard)
+  emoji = ''
+  if logic.temp_vars[user_id]['context_start']:
+    emoji = '\U00002b55 '
+  if logic.temp_vars[user_id]['task_start']:
+    emoji = '\U0001F534 '
+  text = emoji + text
   message = tg.send_message(chat_id=user_id, text=text, disable_notification=silent, reply_markup=reply_markup)
-  log.info(f'Message to @{username}({user_id}):{text}')
+  log.info(f'Message to user {user_id}:{text}')
   return message
 
 def send_document(user_id, file_path, file_name, caption=None, silent=True):
@@ -131,18 +135,18 @@ def callback_handler(update, context):
   user_id = str(query.message.chat_id)
   logic.check_temp_vars(user_id)
   function, option = query.data.split(':')
-  if function == 'task_stats':
-    report, reply_markup = logic.get_stats(users, user_id, option)
-    with suppress(telegram.error.BadRequest):
-      query.edit_message_text(text=report, reply_markup=reply_markup)
+  if function == 'stats':
+    text, reply_markup = logic.handle_stats_query(users, user_id, option)
+  elif function == 'info':
+    text, reply_markup = logic.handle_info_query(users, user_id, option)
   elif function == 'description':
     text, reply_markup = logic.handle_description_query(users, user_id, option)
-    with suppress(telegram.error.BadRequest):
-      query.edit_message_text(text=text, reply_markup=reply_markup)
   elif function == 'tag':
     text, reply_markup = logic.handle_tags_query(users, user_id, option)
-    with suppress(telegram.error.BadRequest):
-      query.edit_message_text(text=text, reply_markup=reply_markup)
+  else:
+    query.answer()
+  with suppress(telegram.error.BadRequest):
+    query.edit_message_text(text=text, reply_markup=reply_markup)
   query.answer()
 
 def error_handler(update, context):
