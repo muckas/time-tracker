@@ -15,6 +15,7 @@ def get_temp_vars():
       'context_description':None,
       'stats_delta':0,
       'stats_info':'tasks',
+      'stats_sort':'by-entry',
       'place_name':None,
       'tag_editor_entry_id':None,
       'tag_editor_active_tags':[],

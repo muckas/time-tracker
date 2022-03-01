@@ -457,6 +457,14 @@ def get_all_tags(users, user_id, enabled_only=False, disabled_only=False):
         tags_list.pop(tag_id)
   return tags_list
 
+def get_all_tags_by_function(users, user_id, function, enabled_only=False, disabled_only=False):
+  tags_list_all = get_all_tags(users, user_id, enabled_only, disabled_only)
+  tag_list_with_function = []
+  for tag_id in tags_list_all:
+    if function in users[user_id]['tags'][tag_id]['functions']:
+      tag_list_with_function.append(tag_id)
+  return tag_list_with_function
+
 def get_all_tags_names(users, user_id, enabled_only=False, disabled_only=False):
   tags_list = get_all_tags(users, user_id, enabled_only, disabled_only)
   names_list = []
@@ -860,9 +868,15 @@ def get_entry_info(users, user_id, entry_id):
     time_total = datetime.timedelta(seconds=entry_info['time_total'])
     time_total_hours = entry_info['time_total'] / 60 / 60
     entry_status = ''
-    active_task_id = users[user_id]['active_task']['id']
-    active_context_id = users[user_id]['active_context']['id']
-    active_place_id = users[user_id]['active_place']['id']
+    active_task_id = None
+    active_context_id = None
+    active_place_id = None
+    if users[user_id]['active_task']:
+      active_task_id = users[user_id]['active_task']['id']
+    if users[user_id]['active_context']:
+      active_context_id = users[user_id]['active_context']['id']
+    if users[user_id]['active_place']:
+      active_place_id = users[user_id]['active_place']['id']
     if active_task_id == entry_id or active_context_id == entry_id or active_place_id == entry_id:
       last_active = 'now'
       last_active_ago = '0m'
@@ -919,10 +933,23 @@ def handle_info_query(users, user_id, query=None):
   reply_markup = InlineKeyboardMarkup(keyboard)
   return report, reply_markup
 
+def stats_alltime_entry(users, user_id, entry_id, entry_info):
+  time_total = datetime.timedelta(seconds=entry_info['time_total'])
+  time_total_hours = entry_info['time_total'] / 60 / 60
+  report = f'{get_name(users, user_id, "all", entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+  return report
+
+def stats_period_entry(users, user_id, entry_id, entry_time):
+  time_total = datetime.timedelta(seconds=entry_time)
+  time_total_hours = entry_time / 60 / 60
+  report = f'{get_name(users, user_id, "all", entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+  return report
+
 def handle_stats_query(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
   stats_info = temp_vars[user_id]['stats_info']
   stats_type = users[user_id]['stats_type']
+  stats_sort = temp_vars[user_id]['stats_sort']
   timezone = users[user_id]['timezone']
   tzdelta = datetime.timezone(datetime.timedelta(hours=timezone))
   if option == 'tasks':
@@ -931,6 +958,12 @@ def handle_stats_query(users, user_id, option=None):
   elif option == 'places':
     stats_info = 'places'
     temp_vars[user_id]['stats_info'] = stats_info
+  elif option == 'by-entry':
+    stats_sort = 'by-entry'
+    temp_vars[user_id]['stats_sort'] = stats_sort
+  elif option == 'by-tag':
+    stats_sort = 'by-tag'
+    temp_vars[user_id]['stats_sort'] = stats_sort
   elif option == 'alltime':
     stats_type = 'alltime'
     users[user_id]['stats_type'] = stats_type
@@ -971,9 +1004,13 @@ def handle_stats_query(users, user_id, option=None):
     temp_vars[user_id]['stats_delta'] = stats_delta
 
   if stats_info == 'tasks':
-    stats_info_button = [InlineKeyboardButton('Place stats', callback_data='stats:places')]
+    stats_info_button = InlineKeyboardButton('Place stats', callback_data='stats:places')
   elif stats_info == 'places':
-    stats_info_button = [InlineKeyboardButton('Task stats', callback_data='stats:tasks')]
+    stats_info_button = InlineKeyboardButton('Task stats', callback_data='stats:tasks')
+  if stats_sort == 'by-entry':
+    stats_sort_button = InlineKeyboardButton('by tags', callback_data='stats:by-tag')
+  elif stats_sort == 'by-tag':
+    stats_sort_button = InlineKeyboardButton('by entry', callback_data='stats:by-entry')
 
   if stats_type == 'detailed':
     entries = get_all(users, user_id, stats_info)
@@ -987,30 +1024,59 @@ def handle_stats_query(users, user_id, option=None):
         InlineKeyboardButton('Month', callback_data='stats:month'),
         InlineKeyboardButton('Year', callback_data='stats:year')
         ],
-        [InlineKeyboardButton('All time', callback_data='stats:alltime')],
+        [
+          InlineKeyboardButton('All time', callback_data='stats:alltime')
+        ],
+        [
         stats_info_button,
+        stats_sort_button,
+        ]
       ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
   elif stats_type == 'alltime':
-    entries = get_enabled(users, user_id, stats_info)
-    entry_list = users[user_id][stats_info]
-    report = 'All time statistics:\n--------------------'
-    for entry_id in entries:
-      entry_info = entry_list[entry_id]
-      time_total = datetime.timedelta(seconds=entry_info['time_total'])
-      time_total_hours = entry_info['time_total'] / 60 / 60
-      report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+    if stats_sort == 'by-entry':
+      report = 'All time statistics by entry\n--------------------'
+      entries = get_all(users, user_id, stats_info)
+      entry_list = users[user_id][stats_info]
+      for entry_id in entries:
+        entry_info = entry_list[entry_id]
+        report += '\n\t\t\t\t' + stats_alltime_entry(users, user_id, entry_id, entry_info)
+    elif stats_sort == 'by-tag':
+      tags_list = get_all_tags_by_function(users, user_id, 'tag')
+      report = 'All time statistics by tag\n--------------------'
+      if tags_list:
+        for tag_id in tags_list:
+          tag_name = get_tag_name(users, user_id, tag_id)
+          entry_list_ids = get_entry_ids_with_tags(users, user_id, stats_info, [tag_name])
+          if entry_list_ids:
+            entry_report = ''
+            tag_time_total = 0
+            for entry_id in entry_list_ids:
+              entry_info = users[user_id][stats_info][entry_id]
+              entry_report += '\n\t\t\t\t' + stats_alltime_entry(users, user_id, entry_id, entry_info)
+              tag_time_total += entry_info['time_total']
+            tag_time_total_str = datetime.timedelta(seconds=tag_time_total)
+            tag_time_total_hours = tag_time_total / 60 / 60
+            report += f'\n\nTag: {tag_name}, {tag_time_total_str} ~ {tag_time_total_hours:.1f} hours'
+            report += entry_report
+      else:
+        report += '\nNo reportable tags'
     keyboard = [
         [
         InlineKeyboardButton('Day', callback_data='stats:day'),
         InlineKeyboardButton('Month', callback_data='stats:month'),
         InlineKeyboardButton('Year', callback_data='stats:year')
         ],
-        [InlineKeyboardButton('Detailed', callback_data='stats:detailed')],
+        [
+          InlineKeyboardButton('Detailed', callback_data='stats:detailed')
+        ],
+        [
         stats_info_button,
+        stats_sort_button,
         ]
+      ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
 
@@ -1018,16 +1084,37 @@ def handle_stats_query(users, user_id, option=None):
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{stats_info[:-1]}-totals-{user_id}'
-    report = f'Year statistics: {date.year}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
       try:
         year = str(date.year)
-        for entry_id in totals[year]['total_time']:
-          entry_time = totals[year]['total_time'][entry_id]
-          time_total = datetime.timedelta(seconds=entry_time)
-          time_total_hours = entry_time / 60 / 60
-          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        if stats_sort == 'by-entry':
+          report = f'Year statistics by entry: {date.year}\n--------------------'
+          for entry_id in totals[year]['total_time']:
+            entry_time = totals[year]['total_time'][entry_id]
+            report += '\n\t\t\t\t' + stats_period_entry(users, user_id, entry_id, entry_time)
+        elif stats_sort == 'by-tag':
+          tags_list = get_all_tags_by_function(users, user_id, 'tag')
+          report = f'Year statistics by tag: {date.year}\n--------------------'
+          if tags_list:
+            for tag_id in tags_list:
+              tag_name = get_tag_name(users, user_id, tag_id)
+              entry_list_ids = get_entry_ids_with_tags(users, user_id, stats_info, [tag_name])
+              if entry_list_ids:
+                entry_report = ''
+                tag_time_total = 0
+                for entry_id in entry_list_ids:
+                  if entry_id in totals[year]['total_time'].keys():
+                    entry_time = totals[year]['total_time'][entry_id]
+                    entry_report += '\n\t\t\t\t' + stats_period_entry(users, user_id, entry_id, entry_time)
+                    tag_time_total += entry_time
+                if entry_report:
+                  tag_time_total_str = datetime.timedelta(seconds=tag_time_total)
+                  tag_time_total_hours = tag_time_total / 60 / 60
+                  report += f'\n\nTag: {tag_name}, {tag_time_total_str} ~ {tag_time_total_hours:.1f} hours'
+                  report += entry_report
+          else:
+            report += '\nNo reportable tags'
       except KeyError:
         report += f'\nNo data for {date.year}'
     else:
@@ -1045,7 +1132,10 @@ def handle_stats_query(users, user_id, option=None):
           InlineKeyboardButton('<', callback_data='stats:left'),
           InlineKeyboardButton('>', callback_data='stats:right'),
         ],
+        [
         stats_info_button,
+        stats_sort_button,
+        ]
       ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
@@ -1054,17 +1144,38 @@ def handle_stats_query(users, user_id, option=None):
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{stats_info[:-1]}-totals-{user_id}'
-    report = f'Month statistics: {date.year}-{date.month}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
       try:
         year = str(date.year)
         month = str(date.month)
-        for entry_id in totals[year][month]['total_time']:
-          entry_time = totals[year][month]['total_time'][entry_id]
-          time_total = datetime.timedelta(seconds=entry_time)
-          time_total_hours = entry_time / 60 / 60
-          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        if stats_sort == 'by-entry':
+          report = f'Month statistics by entry: {year}-{month}\n--------------------'
+          for entry_id in totals[year][month]['total_time']:
+            entry_time = totals[year][month]['total_time'][entry_id]
+            report += '\n\t\t\t\t' + stats_period_entry(users, user_id, entry_id, entry_time)
+        elif stats_sort == 'by-tag':
+          tags_list = get_all_tags_by_function(users, user_id, 'tag')
+          report = f'Month statistics by tag: {year}-{month}\n--------------------'
+          if tags_list:
+            for tag_id in tags_list:
+              tag_name = get_tag_name(users, user_id, tag_id)
+              entry_list_ids = get_entry_ids_with_tags(users, user_id, stats_info, [tag_name])
+              if entry_list_ids:
+                entry_report = ''
+                tag_time_total = 0
+                for entry_id in entry_list_ids:
+                  if entry_id in totals[year][month]['total_time'].keys():
+                    entry_time = totals[year][month]['total_time'][entry_id]
+                    entry_report += '\n\t\t\t\t' + stats_period_entry(users, user_id, entry_id, entry_time)
+                    tag_time_total += entry_time
+                if entry_report:
+                  tag_time_total_str = datetime.timedelta(seconds=tag_time_total)
+                  tag_time_total_hours = tag_time_total / 60 / 60
+                  report += f'\n\nTag: {tag_name}, {tag_time_total_str} ~ {tag_time_total_hours:.1f} hours'
+                  report += entry_report
+          else:
+            report += '\nNo reportable tags'
       except KeyError:
         report += f'\nNo data for {date.year}-{date.month}'
     else:
@@ -1082,7 +1193,10 @@ def handle_stats_query(users, user_id, option=None):
           InlineKeyboardButton('<', callback_data='stats:left'),
           InlineKeyboardButton('>', callback_data='stats:right'),
         ],
+        [
         stats_info_button,
+        stats_sort_button,
+        ]
       ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup
@@ -1091,18 +1205,39 @@ def handle_stats_query(users, user_id, option=None):
     timedelta = datetime.timedelta(days=stats_delta)
     date = datetime.datetime.now(tzdelta) - timedelta
     filename = f'{stats_info[:-1]}-totals-{user_id}'
-    report = f'Day statistics: {date.year}-{date.month}-{date.day}\n--------------------'
     totals = db.read(os.path.join('data', user_id, filename))
     if totals:
       try:
         year = str(date.year)
         month = str(date.month)
         day = str(date.day)
-        for entry_id in totals[year][month][day]['total_time']:
-          entry_time = totals[year][month][day]['total_time'][entry_id]
-          time_total = datetime.timedelta(seconds=entry_time)
-          time_total_hours = entry_time / 60 / 60
-          report += f'\n{get_name(users, user_id, stats_info, entry_id)}: {time_total} ~ {time_total_hours:.1f} hours'
+        if stats_sort == 'by-entry':
+          report = f'Day statistics by entry: {year}-{month}-{day}\n--------------------'
+          for entry_id in totals[year][month][day]['total_time']:
+            entry_time = totals[year][month][day]['total_time'][entry_id]
+            report += '\n\t\t\t\t' + stats_period_entry(users, user_id, entry_id, entry_time)
+        elif stats_sort == 'by-tag':
+          tags_list = get_all_tags_by_function(users, user_id, 'tag')
+          report = f'Day statistics by tag: {year}-{month}-{day}\n--------------------'
+          if tags_list:
+            for tag_id in tags_list:
+              tag_name = get_tag_name(users, user_id, tag_id)
+              entry_list_ids = get_entry_ids_with_tags(users, user_id, stats_info, [tag_name])
+              if entry_list_ids:
+                entry_report = ''
+                tag_time_total = 0
+                for entry_id in entry_list_ids:
+                  if entry_id in totals[year][month][day]['total_time'].keys():
+                    entry_time = totals[year][month][day]['total_time'][entry_id]
+                    entry_report += '\n\t\t\t\t' + stats_period_entry(users, user_id, entry_id, entry_time)
+                    tag_time_total += entry_time
+                if entry_report:
+                  tag_time_total_str = datetime.timedelta(seconds=tag_time_total)
+                  tag_time_total_hours = tag_time_total / 60 / 60
+                  report += f'\n\nTag: {tag_name}, {tag_time_total_str} ~ {tag_time_total_hours:.1f} hours'
+                  report += entry_report
+          else:
+            report += '\nNo reportable tags'
       except KeyError:
         report += f'\nNo data for {date.year}-{date.month}-{date.day}'
     else:
@@ -1120,7 +1255,10 @@ def handle_stats_query(users, user_id, option=None):
           InlineKeyboardButton('<', callback_data='stats:left'),
           InlineKeyboardButton('>', callback_data='stats:right'),
         ],
+        [
         stats_info_button,
+        stats_sort_button,
+        ]
       ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return report, reply_markup

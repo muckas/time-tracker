@@ -136,7 +136,7 @@ def callback_handler(update, context):
   logic.check_temp_vars(user_id)
   function, option = query.data.split(':')
   if function == 'stats':
-    report, reply_markup = logic.handle_stats_query(users, user_id, option)
+    text, reply_markup = logic.handle_stats_query(users, user_id, option)
   elif function == 'info':
     text, reply_markup = logic.handle_info_query(users, user_id, option)
   elif function == 'description':
