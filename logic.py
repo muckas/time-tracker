@@ -192,9 +192,9 @@ def get_main_menu(users, user_id):
         [
           constants.get_name('entry_stats'),
         ],
-        # [
-        #   constants.get_name('tag_stats'),
-        # ],
+        [
+          constants.get_name('entry_info'),
+        ],
         [
           constants.get_name('menu_main'),
           constants.get_name('menu_stats'),
@@ -336,7 +336,10 @@ def get_name(users, user_id, info_type, info_id):
     entry_list = users[user_id]['places']
   elif info_type in ('all',):
     entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
-  return entry_list[info_id]['name']
+  if info_id in entry_list.keys():
+    return entry_list[info_id]['name']
+  else:
+    return None
 
 def get_enabled(users, user_id, info_type):
   if info_type in ('task', 'tasks',):
@@ -838,7 +841,85 @@ def add_tag(users, user_id, tag_name, enabled=True):
     db.write('users', users)
     return f'Added tag "{tag_name}"'
 
-def get_stats(users, user_id, option=None):
+def get_entry_info(users, user_id, entry_id):
+    if entry_id in users[user_id]['tasks'].keys():
+      entry_info = users[user_id]['tasks'][entry_id]
+    elif entry_id in users[user_id]['places'].keys():
+      entry_info = users[user_id]['places'][entry_id]
+    else:
+      return None
+    tags = get_entry_tags_names(users, user_id, entry_id)
+    entry_tags = ''
+    if tags:
+      for tag in tags:
+        entry_tags += f'{tag}, '
+    else:
+      entry_tags = 'No tags'
+    date_added = timezoned(users, user_id, entry_info['date_added'])
+    date_added = datetime.datetime.utcfromtimestamp(date_added)
+    time_total = datetime.timedelta(seconds=entry_info['time_total'])
+    time_total_hours = entry_info['time_total'] / 60 / 60
+    entry_status = ''
+    active_task_id = users[user_id]['active_task']['id']
+    active_context_id = users[user_id]['active_context']['id']
+    active_place_id = users[user_id]['active_place']['id']
+    if active_task_id == entry_id or active_context_id == entry_id or active_place_id == entry_id:
+      last_active = 'now'
+      last_active_ago = '0m'
+    else:
+      if entry_info['last_active']:
+        last_active = timezoned(users, user_id, entry_info['last_active'])
+        last_active = datetime.datetime.utcfromtimestamp(last_active)
+        last_active_ago = int(time.time()) - int(entry_info['last_active'])
+        if last_active_ago > 60*60*24:
+          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active']).days
+          last_active_ago = f'{last_active_ago} days'
+        else:
+          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active'])
+      else:
+        last_active = 'never'
+        last_active_ago = 'never'
+    if not entry_info['enabled']: entry_status = ' (disabled)'
+    report = f'''{get_name(users, user_id, "all", entry_id)}{entry_status}
+    Tags: {entry_tags}
+    Creation date: {date_added}
+    Last active: {last_active} ~ {last_active_ago} ago
+    Total time: {time_total} ~ {time_total_hours:.1f} hours'''
+    return report
+
+def handle_info_query(users, user_id, query=None):
+  info_type = temp_vars[user_id]['stats_info']
+  if query == 'tasks':
+    info_type = 'tasks'
+    temp_vars[user_id]['stats_info'] = info_type
+  elif query == 'places':
+    info_type = 'places'
+    temp_vars[user_id]['stats_info'] = info_type
+  if info_type == 'tasks':
+    report = 'Task: '
+    last_row = InlineKeyboardButton('Show places', callback_data=f'info:places'),
+  elif info_type == 'places':
+    report = 'Place: '
+    last_row = InlineKeyboardButton('Show tasks', callback_data=f'info:tasks'),
+  columns = 3
+  entry_id_list = list(get_all(users, user_id, info_type))
+  entry_id = query
+  entry_name = get_name(users, user_id, 'all', query)
+  if entry_name:
+    report += get_entry_info(users, user_id, entry_id)
+  keyboard = []
+  for index in range(0, len(entry_id_list), columns):
+    row = []
+    for offset in range(columns):
+      with suppress(IndexError):
+        entry_id = entry_id_list[index + offset]
+        row.append(InlineKeyboardButton(get_name(users, user_id, 'all', entry_id), callback_data=f'info:{entry_id}'))
+    keyboard.append(row)
+  keyboard.append(last_row)
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return report, reply_markup
+
+def handle_stats_query(users, user_id, option=None):
   stats_delta = temp_vars[user_id]['stats_delta']
   stats_info = temp_vars[user_id]['stats_info']
   stats_type = users[user_id]['stats_type']
@@ -899,29 +980,7 @@ def get_stats(users, user_id, option=None):
     entry_list = users[user_id][stats_info]
     report = 'Detailed statistics:\n--------------------'
     for entry_id in entries:
-      entry_info = entry_list[entry_id]
-      date_added = timezoned(users, user_id, entry_info['date_added'])
-      date_added = datetime.datetime.utcfromtimestamp(date_added)
-      time_total = datetime.timedelta(seconds=entry_info['time_total'])
-      time_total_hours = entry_info['time_total'] / 60 / 60
-      entry_status = ''
-      if entry_info['last_active']:
-        last_active = timezoned(users, user_id, entry_info['last_active'])
-        last_active = datetime.datetime.utcfromtimestamp(last_active)
-        last_active_ago = int(time.time()) - int(entry_info['last_active'])
-        if last_active_ago > 60*60*24:
-          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active']).days
-          last_active_ago = f'{last_active_ago} days'
-        else:
-          last_active_ago = datetime.timedelta(seconds= int(time.time()) - entry_info['last_active'])
-      else:
-        last_active = 'never'
-        last_active_ago = 'never'
-      if not entry_info['enabled']: entry_status = ' (disabled)'
-      report += f'''\n{get_name(users, user_id, stats_info, entry_id)}{entry_status}
-      Creation date: {date_added}
-      Last active: {last_active} ~ {last_active_ago} ago
-      Total time: {time_total} ~ {time_total_hours:.1f} hours'''
+      report += '\n' + get_entry_info(users, user_id, entry_id)
     keyboard = [
         [
         InlineKeyboardButton('Day', callback_data='stats:day'),
@@ -1635,7 +1694,11 @@ def menu_handler(user_id, text):
 
     elif button_name == constants.get_name('entry_stats'):
       temp_vars[user_id]['stats_delta'] = 0
-      report, reply_markup = get_stats(users ,user_id, users[user_id]['stats_type'])
+      report, reply_markup = handle_stats_query(users, user_id, users[user_id]['stats_type'])
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+
+    elif button_name == constants.get_name('entry_info'):
+      report, reply_markup = handle_info_query(users, user_id)
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('add_place'):

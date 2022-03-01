@@ -118,6 +118,7 @@ def get_name(name):
     'show_enabled':'Show enabled',
 
     'entry_stats':'Total statistics',
+    'entry_info':'Entry info',
 
     'start_task':'Start task',
     'add_task':'Add task',

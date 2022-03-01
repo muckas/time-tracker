@@ -136,17 +136,17 @@ def callback_handler(update, context):
   logic.check_temp_vars(user_id)
   function, option = query.data.split(':')
   if function == 'stats':
-    report, reply_markup = logic.get_stats(users, user_id, option)
-    with suppress(telegram.error.BadRequest):
-      query.edit_message_text(text=report, reply_markup=reply_markup)
+    report, reply_markup = logic.handle_stats_query(users, user_id, option)
+  elif function == 'info':
+    text, reply_markup = logic.handle_info_query(users, user_id, option)
   elif function == 'description':
     text, reply_markup = logic.handle_description_query(users, user_id, option)
-    with suppress(telegram.error.BadRequest):
-      query.edit_message_text(text=text, reply_markup=reply_markup)
   elif function == 'tag':
     text, reply_markup = logic.handle_tags_query(users, user_id, option)
-    with suppress(telegram.error.BadRequest):
-      query.edit_message_text(text=text, reply_markup=reply_markup)
+  else:
+    query.answer()
+  with suppress(telegram.error.BadRequest):
+    query.edit_message_text(text=text, reply_markup=reply_markup)
   query.answer()
 
 def error_handler(update, context):
