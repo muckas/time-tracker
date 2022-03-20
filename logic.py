@@ -1267,14 +1267,14 @@ def handle_stats_query(users, user_id, option=None):
 
 def get_descriptions_reply_markup(users, user_id, task_id):
   keyboard = []
-  max_inline_descriptions = 3
+  max_inline_descriptions = 2
   i = 0
   for description in users[user_id]['tasks'][task_id]['descriptions']:
     if i == max_inline_descriptions:
       break
     keyboard += [InlineKeyboardButton(description, callback_data = f'description:{i}')],
     i += 1
-  # keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
+  keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
   reply_markup = InlineKeyboardMarkup(keyboard)
   return reply_markup
 
