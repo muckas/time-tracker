@@ -1724,6 +1724,7 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('menu_main'):
       change_menu_state(users, user_id, 'menu_main')
       tgbot.send_message(user_id, 'Main menu', keyboard=get_main_menu(users, user_id))
+      get_new_timer(user_id, notify=False)
 
     elif button_name == constants.get_name('menu_ext'):
       change_menu_state(users, user_id, 'menu_ext')
