@@ -23,10 +23,10 @@ def send_message(user_id, text, silent=True, keyboard=None, reply_markup=None):
     else:
       reply_markup = ReplyKeyboardMarkup(keyboard)
   emoji = ''
-  if logic.temp_vars[user_id]['context_start']:
-    emoji = '\U00002b55 '
   if logic.temp_vars[user_id]['task_start']:
-    emoji = '\U0001F534 '
+    emoji += '\U0001F534 '
+  if logic.temp_vars[user_id]['context_start']:
+    emoji += '\U00002b55 '
   text = emoji + text
   message = tg.send_message(chat_id=user_id, text=text, disable_notification=silent, reply_markup=reply_markup)
   log.info(f'Message to user {user_id}:{text}')

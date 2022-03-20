@@ -80,10 +80,10 @@ def update_timer(user_id):
     context_timer = int(time.time()) - context_start
     context_timer = datetime.timedelta(seconds=context_timer)
   emoji = ''
-  if temp_vars[user_id]['context_start']:
-    emoji = '\U00002b55 '
   if temp_vars[user_id]['task_start']:
-    emoji = '\U0001F534 '
+    emoji += '\U0001F534'
+  if temp_vars[user_id]['context_start']:
+    emoji += '\U00002b55'
   text = f'{emoji}\n'
   text += f'{task_timer}{task_name}{task_description}'
   if task_start:
