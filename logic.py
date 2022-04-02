@@ -300,6 +300,17 @@ def get_options_keyboard(options, columns=2):
     keyboard.append(row)
   return keyboard
 
+def get_inline_options_keyboard(options_dict, columns=2):
+  keyboard = []
+  for index in range(0, len(options_dict), columns):
+    row = []
+    for offset in range(columns):
+      with suppress(IndexError):
+        option_key = list(options_dict.keys())[index + offset]
+        row.append(InlineKeyboardButton(option_key, callback_data=options_dict[option_key]))
+    keyboard.append(row)
+  return keyboard
+
 def enable_menu(users, user_id):
   change_state(users, user_id, 'main_menu')
   tgbot.send_message(user_id, 'Menu enabled', keyboard=get_main_menu(users, user_id))
@@ -901,36 +912,38 @@ def get_entry_info(users, user_id, entry_id):
     Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     return report
 
-def handle_info_query(users, user_id, query=None):
-  info_type = temp_vars[user_id]['stats_info']
-  if query == 'tasks':
-    info_type = 'tasks'
-    temp_vars[user_id]['stats_info'] = info_type
-  elif query == 'places':
-    info_type = 'places'
-    temp_vars[user_id]['stats_info'] = info_type
+def handle_info_query(users, user_id, query='0|tasks|no-entry'):
+  page_entries = 6
+  columns = 2
+  page, info_type, chosen_entry_id = query.split('|')
+  page = int(page)
+  if page < 0: page = 0
+  # Last row start
+  last_row = InlineKeyboardButton('<', callback_data=f'info:{page-1}|{info_type}|{chosen_entry_id}'),
   if info_type == 'tasks':
     report = 'Task: '
-    last_row = InlineKeyboardButton('Show places', callback_data=f'info:places'),
+    last_row += InlineKeyboardButton('Show places', callback_data=f'info:{page}|places|{chosen_entry_id}'),
   elif info_type == 'places':
     report = 'Place: '
-    last_row = InlineKeyboardButton('Show tasks', callback_data=f'info:tasks'),
-  columns = 3
+    last_row += InlineKeyboardButton('Show tasks', callback_data=f'info:{page}|tasks|{chosen_entry_id}'),
+  last_row += InlineKeyboardButton('>', callback_data=f'info:{page+1}|{info_type}|{chosen_entry_id}'),
+  # Last row end
   entry_id_list = list(get_all(users, user_id, info_type))
-  entry_id = query
-  entry_name = get_name(users, user_id, 'all', query)
+  entry_name = get_name(users, user_id, 'all', chosen_entry_id)
   if entry_name:
-    report += get_entry_info(users, user_id, entry_id)
-  keyboard = []
-  for index in range(0, len(entry_id_list), columns):
-    row = []
-    for offset in range(columns):
-      with suppress(IndexError):
-        entry_id = entry_id_list[index + offset]
-        row.append(InlineKeyboardButton(get_name(users, user_id, 'all', entry_id), callback_data=f'info:{entry_id}'))
-    keyboard.append(row)
+    report += get_entry_info(users, user_id, chosen_entry_id)
+  # Keyboard generation
+  options_dict = {}
+  entry_slice_start = page * page_entries
+  entry_slice_end = entry_slice_start + page_entries
+  entry_page = list(users[user_id][info_type].keys())[entry_slice_start:entry_slice_end]
+  for entry_id in entry_page:
+    entry_name = users[user_id][info_type][entry_id]['name']
+    options_dict.update({entry_name:f'info:{page}|{info_type}|{entry_id}'})
+  keyboard = get_inline_options_keyboard(options_dict, columns)
   keyboard.append(last_row)
   reply_markup = InlineKeyboardMarkup(keyboard)
+  report += f'\np. {page+1}'
   return report, reply_markup
 
 def stats_alltime_entry(users, user_id, entry_id, entry_info):
