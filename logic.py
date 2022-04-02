@@ -541,6 +541,7 @@ def stop_task(users, user_id, task_id, time_text, context=False):
     else:
       return None
   timezone = users[user_id]['timezone']
+  write_task_description(users, user_id, task_id, task_description, task_start_time, task_end_time)
   write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone, context=context)
   # Updating task info in users.json
   if context:
@@ -555,6 +556,19 @@ def stop_task(users, user_id, task_id, time_text, context=False):
   users[user_id]['tasks'][task_id]['time_total'] += task_duration_sec
   db.write('users',users)
   return task_duration
+
+def write_task_description(users, user_id, task_id, description_name, task_start_time, task_end_time):
+  if description_name:
+    description_id = get_description_id(users, user_id, task_id, description_name)
+    if not description_id:
+      description_id = str(uuid.uuid4())
+      users[user_id]['tasks'][task_id]['descriptions'].update(
+          {description_id:constants.get_default_description(description_name)}
+          )
+    task_total_time = task_end_time - task_start_time
+    users[user_id]['tasks'][task_id]['descriptions'][description_id]['time_total'] += int(task_total_time)
+    users[user_id]['tasks'][task_id]['descriptions'][description_id]['last_active'] = int(time.time())
+    db.write('users', users)
 
 def write_task_to_diary(users, user_id, task_id, task_description,
                        start_time, end_time, timezone, context=False, totals_obj=None
@@ -1278,15 +1292,35 @@ def handle_stats_query(users, user_id, option=None):
   else:
     return 'Wrong query data', None
 
+
+def get_description_id(users, user_id, task_id, name):
+  descriptions = users[user_id]['tasks'][task_id]['descriptions']
+  for description_id in descriptions:
+    if name == descriptions[description_id]['name']:
+      return description_id
+  return None
+
+def get_description_names_sorted(users, user_id, task_id):
+  descriptions = users[user_id]['tasks'][task_id]['descriptions']
+  description_names = []
+  for description_id in descriptions:
+    description_names.append(descriptions[description_id]['name'])
+  def description_sort(name):
+    return descriptions[get_description_id(users, user_id, task_id, name)]['last_active']
+  print(description_names)
+  if description_names:
+    description_names.sort(key=description_sort, reverse=True)
+    print(description_names)
+    return description_names
+  else:
+    return []
+
 def get_descriptions_reply_markup(users, user_id, task_id):
   keyboard = []
   max_inline_descriptions = 2
-  i = 0
-  for description in users[user_id]['tasks'][task_id]['descriptions']:
-    if i == max_inline_descriptions:
-      break
-    keyboard += [InlineKeyboardButton(description, callback_data = f'description:{i}')],
-    i += 1
+  for description_name in get_description_names_sorted(users, user_id, task_id)[:max_inline_descriptions]:
+    description_id = get_description_id(users, user_id, task_id, description_name)
+    keyboard += [InlineKeyboardButton(description_name, callback_data = f'description:{description_id}')],
   keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
   reply_markup = InlineKeyboardMarkup(keyboard)
   return reply_markup
@@ -1294,16 +1328,14 @@ def get_descriptions_reply_markup(users, user_id, task_id):
 def handle_description_query(users, user_id, query):
   if users[user_id]['active_task']:
     try:
-      description_number = int(query)
+      description_id = query
       task_id = users[user_id]['active_task']['id']
-      description = users[user_id]['tasks'][task_id]['descriptions'][description_number]
-      users[user_id]['tasks'][task_id]['descriptions'].remove(description)
-      users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
-      users[user_id]['active_task']['description'] = description
+      description_name = users[user_id]['tasks'][task_id]['descriptions'][description_id]['name']
+      users[user_id]['active_task']['description'] = description_name
       db.write('users', users)
-      temp_vars[user_id]['task_description'] = description
-      return f'Description: {description}', None
-    except ValueError:
+      temp_vars[user_id]['task_description'] = description_name
+      return f'Description: {description_name}', None
+    except KeyError:
       if query == 'new':
         tgbot.send_message(user_id, 'Type new description\n/cancel', keyboard=[])
         change_state(users, user_id, 'new_task_description')
@@ -1311,27 +1343,15 @@ def handle_description_query(users, user_id, query):
   else:
     return 'No active task', None
 
-def add_description(users, user_id, description, entry_type):
-  max_descriptions = 99
+def new_description(users, user_id, description_name, entry_type):
   if entry_type == 'task':
-    entry_id = users[user_id]['active_task']['id']
+    users[user_id]['active_task']['description'] = description_name
+    temp_vars[user_id]['task_description'] = description_name
   elif entry_type == 'context':
-    entry_id = users[user_id]['active_context']['id']
-  if description in users[user_id]['tasks'][entry_id]['descriptions']:
-    users[user_id]['tasks'][entry_id]['descriptions'].remove(description)
-    users[user_id]['tasks'][entry_id]['descriptions'].insert(0, description)
-  else:
-    users[user_id]['tasks'][entry_id]['descriptions'].insert(0, description)
-    while len(users[user_id]['tasks'][entry_id]['descriptions']) > max_descriptions:
-      users[user_id]['tasks'][entry_id]['descriptions'].pop(-1)
-  if entry_type == 'task':
-    users[user_id]['active_task']['description'] = description
-    temp_vars[user_id]['task_description'] = description
-  elif entry_type == 'context':
-    users[user_id]['active_context']['description'] = description
-    temp_vars[user_id]['context_description'] = description
+    users[user_id]['active_context']['description'] = description_name
+    temp_vars[user_id]['context_description'] = description_name
   db.write('users', users)
-  return f'Current {entry_type}: {get_name(users, user_id, "task", entry_id)}\nDescription: {description}'
+  return f'New description: {description_name}'
 
 def get_tags_reply_markup(users, user_id, entry_id):
   entry_name = get_name(users, user_id, 'all', entry_id)
@@ -1410,14 +1430,14 @@ def menu_handler(user_id, text):
 
   # STATE - new_task_description
   if state == 'new_task_description':
-    reply = add_description(users, user_id, text, 'task')
+    reply = new_description(users, user_id, text, 'task')
     tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
     get_new_timer(user_id)
 
   # STATE - new_context_description
   elif state == 'new_context_description':
-    reply = add_description(users, user_id, text, 'context')
+    reply = new_description(users, user_id, text, 'context')
     tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
     get_new_timer(user_id)
