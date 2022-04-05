@@ -194,6 +194,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('entry_info'),
+          constants.get_name('description_info'),
         ],
         [
           constants.get_name('menu_main'),
@@ -567,7 +568,7 @@ def write_task_description(users, user_id, task_id, description_name, task_start
           )
     task_total_time = task_end_time - task_start_time
     users[user_id]['tasks'][task_id]['descriptions'][description_id]['time_total'] += int(task_total_time)
-    users[user_id]['tasks'][task_id]['descriptions'][description_id]['last_active'] = int(time.time())
+    users[user_id]['tasks'][task_id]['descriptions'][description_id]['last_active'] = task_end_time
     db.write('users', users)
 
 def write_task_to_diary(users, user_id, task_id, task_description,
@@ -942,7 +943,6 @@ def handle_info_query(users, user_id, query='0|tasks|no-entry'):
     last_row += InlineKeyboardButton('Show tasks', callback_data=f'info:{page}|tasks|{chosen_entry_id}'),
   last_row += InlineKeyboardButton('>', callback_data=f'info:{page+1}|{info_type}|{chosen_entry_id}'),
   # Last row end
-  entry_id_list = list(get_all(users, user_id, info_type))
   entry_name = get_name(users, user_id, 'all', chosen_entry_id)
   if entry_name:
     report += get_entry_info(users, user_id, chosen_entry_id)
@@ -955,6 +955,80 @@ def handle_info_query(users, user_id, query='0|tasks|no-entry'):
     entry_name = users[user_id][info_type][entry_id]['name']
     options_dict.update({entry_name:f'info:{page}|{info_type}|{entry_id}'})
   keyboard = get_inline_options_keyboard(options_dict, columns)
+  keyboard.append(last_row)
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  report += f'\np. {page+1}'
+  return report, reply_markup
+
+def get_description_info(users, user_id, task_id, description_id):
+  description = users[user_id]['tasks'][task_id]['descriptions'][description_id]
+  name = description['name']
+  time_total = description['time_total']
+  date_added = timezoned(users, user_id, description['date_added'])
+  date_added = datetime.datetime.utcfromtimestamp(date_added)
+  time_total = datetime.timedelta(seconds = description['time_total'])
+  time_total_hours = description['time_total'] / 60 / 60
+  last_active = timezoned(users, user_id, description['last_active'])
+  last_active = datetime.datetime.utcfromtimestamp(last_active)
+  last_active_ago = int(time.time()) - int(description['last_active'])
+  if last_active_ago > 60*60*24:
+    last_active_ago = datetime.timedelta(seconds= int(time.time()) - description['last_active']).days
+    last_active_ago = f'{last_active_ago} days'
+  else:
+    last_active_ago = datetime.timedelta(seconds= int(time.time()) - description['last_active'])
+  report = f'''{name}
+    Creation date: {date_added}
+    Last active: {last_active} ~ {last_active_ago} ago
+    Total time: {time_total} ~ {time_total_hours:.1f} hours'''
+  return report
+
+def handle_description_info_query(users, user_id, query='0|start|0'):
+  page_entries = 6
+  columns = 2
+  page, command, query_entry = query.split('|')
+  page = int(page)
+  if page < 0: page = 0
+  chosen_entry_id = temp_vars[user_id]['chosen_entry_id']
+  chosen_description_id = temp_vars[user_id]['chosen_description_id']
+  if command == 'start':
+    chosen_entry_id = temp_vars[user_id]['chosen_entry_id'] = 0
+    chosen_description_id = temp_vars[user_id]['chosen_description_id'] = 0
+  elif command == 'task':
+    chosen_entry_id = temp_vars[user_id]['chosen_entry_id'] = query_entry
+  elif command == 'description':
+    chosen_description_id = temp_vars[user_id]['chosen_description_id'] = query_entry
+  report = 'Description viewer\n======================='
+  # Last row start
+  last_row = InlineKeyboardButton('<', callback_data=f'desc_info:{page-1}|0|0'),
+  last_row += InlineKeyboardButton('Change task', callback_data=f'desc_info:0|start|0'),
+  last_row += InlineKeyboardButton('>', callback_data=f'desc_info:{page+1}|0|0'),
+  # Last row end
+  entry_name = get_name(users, user_id, 'all', chosen_entry_id)
+  keyboard = []
+  if entry_name:
+    report += '\nTask: ' + get_name(users, user_id, 'tasks', chosen_entry_id)
+    if chosen_description_id in users[user_id]['tasks'][chosen_entry_id]['descriptions'].keys():
+      report += '\n' + get_description_info(users, user_id, chosen_entry_id, chosen_description_id)
+    # Descriptions keyboard generation
+    options_dict = {}
+    description_slice_start = page * page_entries
+    description_slice_end = description_slice_start + page_entries
+    description_page = list(get_description_ids_sorted(users, user_id, chosen_entry_id))
+    description_page = description_page[description_slice_start:description_slice_end]
+    for description_id in description_page:
+      description_name = users[user_id]['tasks'][chosen_entry_id]['descriptions'][description_id]['name']
+      options_dict.update({description_name:f'desc_info:{page}|description|{description_id}'})
+    keyboard = get_inline_options_keyboard(options_dict, columns=1)
+  else:
+    # Tasks keyboard generation
+    options_dict = {}
+    entry_slice_start = page * page_entries
+    entry_slice_end = entry_slice_start + page_entries
+    entry_page = list(users[user_id]['tasks'].keys())[entry_slice_start:entry_slice_end]
+    for entry_id in entry_page:
+      entry_name = users[user_id]['tasks'][entry_id]['name']
+      options_dict.update({entry_name:f'desc_info:0|task|{entry_id}'})
+    keyboard = get_inline_options_keyboard(options_dict, columns)
   keyboard.append(last_row)
   reply_markup = InlineKeyboardMarkup(keyboard)
   report += f'\np. {page+1}'
@@ -1300,17 +1374,22 @@ def get_description_id(users, user_id, task_id, name):
       return description_id
   return None
 
+def get_description_ids_sorted(users, user_id, task_id):
+  description_ids = list(users[user_id]['tasks'][task_id]['descriptions'].keys())
+  def description_sort(description_id):
+    return users[user_id]['tasks'][task_id]['descriptions'][description_id]['last_active']
+  if description_ids:
+    description_ids.sort(key=description_sort, reverse=True)
+    return description_ids
+  else:
+    return []
+
 def get_description_names_sorted(users, user_id, task_id):
-  descriptions = users[user_id]['tasks'][task_id]['descriptions']
+  description_ids = get_description_ids_sorted(users, user_id, task_id)
   description_names = []
-  for description_id in descriptions:
-    description_names.append(descriptions[description_id]['name'])
-  def description_sort(name):
-    return descriptions[get_description_id(users, user_id, task_id, name)]['last_active']
-  print(description_names)
+  for description_id in description_ids:
+    description_names.append(users[user_id]['tasks'][task_id]['descriptions'][description_id]['name'])
   if description_names:
-    description_names.sort(key=description_sort, reverse=True)
-    print(description_names)
     return description_names
   else:
     return []
@@ -1871,6 +1950,10 @@ def menu_handler(user_id, text):
 
     elif button_name == constants.get_name('entry_info'):
       report, reply_markup = handle_info_query(users, user_id)
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+
+    elif button_name == constants.get_name('description_info'):
+      report, reply_markup = handle_description_info_query(users, user_id)
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('add_place'):

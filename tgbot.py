@@ -139,12 +139,15 @@ def callback_handler(update, context):
     text, reply_markup = logic.handle_stats_query(users, user_id, option)
   elif function == 'info':
     text, reply_markup = logic.handle_info_query(users, user_id, option)
+  elif function == 'desc_info':
+    text, reply_markup = logic.handle_description_info_query(users, user_id, option)
   elif function == 'description':
     text, reply_markup = logic.handle_description_query(users, user_id, option)
   elif function == 'tag':
     text, reply_markup = logic.handle_tags_query(users, user_id, option)
   else:
-    query.answer()
+    text = 'Error'
+    reply_markup = None
   with suppress(telegram.error.BadRequest):
     query.edit_message_text(text=text, reply_markup=reply_markup)
   query.answer()
