@@ -1797,7 +1797,7 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('task_description'):
       if users[user_id]['active_task']:
         task_id = users[user_id]['active_task']['id']
-        descriptions = users[user_id]['tasks'][task_id]['descriptions']
+        descriptions = get_description_names_sorted(users, user_id, task_id)
         tgbot.send_message(user_id, 'Task description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
         change_state(users, user_id, 'new_task_description')
       else:
@@ -1807,7 +1807,7 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('context_description'):
       if users[user_id]['active_context']:
         context_id = users[user_id]['active_context']['id']
-        descriptions = users[user_id]['tasks'][context_id]['descriptions']
+        descriptions = get_description_names_sorted(users, user_id, context_id)
         tgbot.send_message(user_id, 'Context description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
         change_state(users, user_id, 'new_context_description')
       else:
