@@ -19,6 +19,8 @@ def get_temp_vars():
       'place_name':None,
       'tag_editor_entry_id':None,
       'tag_editor_active_tags':[],
+      'chosen_entry_id':0,
+      'chosen_description_id':0,
       }
 
 def get_default_user(tg_username):
@@ -47,8 +49,16 @@ def get_default_task(name):
       'date_added': int(time.time()),
       'last_active': None,
       'time_total': 0,
-      'descriptions':[],
+      'descriptions':{},
       'tags':[],
+      }
+
+def get_default_description(name):
+  return {
+      'name': name,
+      'date_added': int(time.time()),
+      'last_active': 0,
+      'time_total': 0,
       }
 
 def get_default_place(name):
@@ -120,6 +130,7 @@ def get_name(name):
 
     'entry_stats':'Total statistics',
     'entry_info':'Entry info',
+    'description_info':'Description info',
 
     'start_task':'Start task',
     'add_task':'Add task',

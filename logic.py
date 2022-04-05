@@ -194,6 +194,7 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('entry_info'),
+          constants.get_name('description_info'),
         ],
         [
           constants.get_name('menu_main'),
@@ -297,6 +298,17 @@ def get_options_keyboard(options, columns=2):
     for offset in range(columns):
       with suppress(IndexError):
         row.append(options[index+offset])
+    keyboard.append(row)
+  return keyboard
+
+def get_inline_options_keyboard(options_dict, columns=2):
+  keyboard = []
+  for index in range(0, len(options_dict), columns):
+    row = []
+    for offset in range(columns):
+      with suppress(IndexError):
+        option_key = list(options_dict.keys())[index + offset]
+        row.append(InlineKeyboardButton(option_key, callback_data=options_dict[option_key]))
     keyboard.append(row)
   return keyboard
 
@@ -530,6 +542,7 @@ def stop_task(users, user_id, task_id, time_text, context=False):
     else:
       return None
   timezone = users[user_id]['timezone']
+  write_task_description(users, user_id, task_id, task_description, task_start_time, task_end_time)
   write_task_to_diary(users, user_id, task_id, task_description, task_start_time, task_end_time, timezone, context=context)
   # Updating task info in users.json
   if context:
@@ -544,6 +557,19 @@ def stop_task(users, user_id, task_id, time_text, context=False):
   users[user_id]['tasks'][task_id]['time_total'] += task_duration_sec
   db.write('users',users)
   return task_duration
+
+def write_task_description(users, user_id, task_id, description_name, task_start_time, task_end_time):
+  if description_name:
+    description_id = get_description_id(users, user_id, task_id, description_name)
+    if not description_id:
+      description_id = str(uuid.uuid4())
+      users[user_id]['tasks'][task_id]['descriptions'].update(
+          {description_id:constants.get_default_description(description_name)}
+          )
+    task_total_time = task_end_time - task_start_time
+    users[user_id]['tasks'][task_id]['descriptions'][description_id]['time_total'] += int(task_total_time)
+    users[user_id]['tasks'][task_id]['descriptions'][description_id]['last_active'] = task_end_time
+    db.write('users', users)
 
 def write_task_to_diary(users, user_id, task_id, task_description,
                        start_time, end_time, timezone, context=False, totals_obj=None
@@ -901,36 +927,111 @@ def get_entry_info(users, user_id, entry_id):
     Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     return report
 
-def handle_info_query(users, user_id, query=None):
-  info_type = temp_vars[user_id]['stats_info']
-  if query == 'tasks':
-    info_type = 'tasks'
-    temp_vars[user_id]['stats_info'] = info_type
-  elif query == 'places':
-    info_type = 'places'
-    temp_vars[user_id]['stats_info'] = info_type
+def handle_info_query(users, user_id, query='0|tasks|no-entry'):
+  page_entries = 6
+  columns = 2
+  page, info_type, chosen_entry_id = query.split('|')
+  page = int(page)
+  if page < 0: page = 0
+  # Last row start
+  last_row = InlineKeyboardButton('<', callback_data=f'info:{page-1}|{info_type}|{chosen_entry_id}'),
   if info_type == 'tasks':
     report = 'Task: '
-    last_row = InlineKeyboardButton('Show places', callback_data=f'info:places'),
+    last_row += InlineKeyboardButton('Show places', callback_data=f'info:{page}|places|{chosen_entry_id}'),
   elif info_type == 'places':
     report = 'Place: '
-    last_row = InlineKeyboardButton('Show tasks', callback_data=f'info:tasks'),
-  columns = 3
-  entry_id_list = list(get_all(users, user_id, info_type))
-  entry_id = query
-  entry_name = get_name(users, user_id, 'all', query)
+    last_row += InlineKeyboardButton('Show tasks', callback_data=f'info:{page}|tasks|{chosen_entry_id}'),
+  last_row += InlineKeyboardButton('>', callback_data=f'info:{page+1}|{info_type}|{chosen_entry_id}'),
+  # Last row end
+  entry_name = get_name(users, user_id, 'all', chosen_entry_id)
   if entry_name:
-    report += get_entry_info(users, user_id, entry_id)
-  keyboard = []
-  for index in range(0, len(entry_id_list), columns):
-    row = []
-    for offset in range(columns):
-      with suppress(IndexError):
-        entry_id = entry_id_list[index + offset]
-        row.append(InlineKeyboardButton(get_name(users, user_id, 'all', entry_id), callback_data=f'info:{entry_id}'))
-    keyboard.append(row)
+    report += get_entry_info(users, user_id, chosen_entry_id)
+  # Keyboard generation
+  options_dict = {}
+  entry_slice_start = page * page_entries
+  entry_slice_end = entry_slice_start + page_entries
+  entry_page = list(users[user_id][info_type].keys())[entry_slice_start:entry_slice_end]
+  for entry_id in entry_page:
+    entry_name = users[user_id][info_type][entry_id]['name']
+    options_dict.update({entry_name:f'info:{page}|{info_type}|{entry_id}'})
+  keyboard = get_inline_options_keyboard(options_dict, columns)
   keyboard.append(last_row)
   reply_markup = InlineKeyboardMarkup(keyboard)
+  report += f'\np. {page+1}'
+  return report, reply_markup
+
+def get_description_info(users, user_id, task_id, description_id):
+  description = users[user_id]['tasks'][task_id]['descriptions'][description_id]
+  name = description['name']
+  time_total = description['time_total']
+  date_added = timezoned(users, user_id, description['date_added'])
+  date_added = datetime.datetime.utcfromtimestamp(date_added)
+  time_total = datetime.timedelta(seconds = description['time_total'])
+  time_total_hours = description['time_total'] / 60 / 60
+  last_active = timezoned(users, user_id, description['last_active'])
+  last_active = datetime.datetime.utcfromtimestamp(last_active)
+  last_active_ago = int(time.time()) - int(description['last_active'])
+  if last_active_ago > 60*60*24:
+    last_active_ago = datetime.timedelta(seconds= int(time.time()) - description['last_active']).days
+    last_active_ago = f'{last_active_ago} days'
+  else:
+    last_active_ago = datetime.timedelta(seconds= int(time.time()) - description['last_active'])
+  report = f'''{name}
+    Creation date: {date_added}
+    Last active: {last_active} ~ {last_active_ago} ago
+    Total time: {time_total} ~ {time_total_hours:.1f} hours'''
+  return report
+
+def handle_description_info_query(users, user_id, query='0|start|0'):
+  page_entries = 6
+  columns = 2
+  page, command, query_entry = query.split('|')
+  page = int(page)
+  if page < 0: page = 0
+  chosen_entry_id = temp_vars[user_id]['chosen_entry_id']
+  chosen_description_id = temp_vars[user_id]['chosen_description_id']
+  if command == 'start':
+    chosen_entry_id = temp_vars[user_id]['chosen_entry_id'] = 0
+    chosen_description_id = temp_vars[user_id]['chosen_description_id'] = 0
+  elif command == 'task':
+    chosen_entry_id = temp_vars[user_id]['chosen_entry_id'] = query_entry
+  elif command == 'description':
+    chosen_description_id = temp_vars[user_id]['chosen_description_id'] = query_entry
+  report = 'Description viewer\n======================='
+  # Last row start
+  last_row = InlineKeyboardButton('<', callback_data=f'desc_info:{page-1}|0|0'),
+  last_row += InlineKeyboardButton('Change task', callback_data=f'desc_info:0|start|0'),
+  last_row += InlineKeyboardButton('>', callback_data=f'desc_info:{page+1}|0|0'),
+  # Last row end
+  entry_name = get_name(users, user_id, 'all', chosen_entry_id)
+  keyboard = []
+  if entry_name:
+    report += '\nTask: ' + get_name(users, user_id, 'tasks', chosen_entry_id)
+    if chosen_description_id in users[user_id]['tasks'][chosen_entry_id]['descriptions'].keys():
+      report += '\n' + get_description_info(users, user_id, chosen_entry_id, chosen_description_id)
+    # Descriptions keyboard generation
+    options_dict = {}
+    description_slice_start = page * page_entries
+    description_slice_end = description_slice_start + page_entries
+    description_page = list(get_description_ids_sorted(users, user_id, chosen_entry_id))
+    description_page = description_page[description_slice_start:description_slice_end]
+    for description_id in description_page:
+      description_name = users[user_id]['tasks'][chosen_entry_id]['descriptions'][description_id]['name']
+      options_dict.update({description_name:f'desc_info:{page}|description|{description_id}'})
+    keyboard = get_inline_options_keyboard(options_dict, columns=1)
+  else:
+    # Tasks keyboard generation
+    options_dict = {}
+    entry_slice_start = page * page_entries
+    entry_slice_end = entry_slice_start + page_entries
+    entry_page = list(users[user_id]['tasks'].keys())[entry_slice_start:entry_slice_end]
+    for entry_id in entry_page:
+      entry_name = users[user_id]['tasks'][entry_id]['name']
+      options_dict.update({entry_name:f'desc_info:0|task|{entry_id}'})
+    keyboard = get_inline_options_keyboard(options_dict, columns)
+  keyboard.append(last_row)
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  report += f'\np. {page+1}'
   return report, reply_markup
 
 def stats_alltime_entry(users, user_id, entry_id, entry_info):
@@ -1265,15 +1366,40 @@ def handle_stats_query(users, user_id, option=None):
   else:
     return 'Wrong query data', None
 
+
+def get_description_id(users, user_id, task_id, name):
+  descriptions = users[user_id]['tasks'][task_id]['descriptions']
+  for description_id in descriptions:
+    if name == descriptions[description_id]['name']:
+      return description_id
+  return None
+
+def get_description_ids_sorted(users, user_id, task_id):
+  description_ids = list(users[user_id]['tasks'][task_id]['descriptions'].keys())
+  def description_sort(description_id):
+    return users[user_id]['tasks'][task_id]['descriptions'][description_id]['last_active']
+  if description_ids:
+    description_ids.sort(key=description_sort, reverse=True)
+    return description_ids
+  else:
+    return []
+
+def get_description_names_sorted(users, user_id, task_id):
+  description_ids = get_description_ids_sorted(users, user_id, task_id)
+  description_names = []
+  for description_id in description_ids:
+    description_names.append(users[user_id]['tasks'][task_id]['descriptions'][description_id]['name'])
+  if description_names:
+    return description_names
+  else:
+    return []
+
 def get_descriptions_reply_markup(users, user_id, task_id):
   keyboard = []
   max_inline_descriptions = 2
-  i = 0
-  for description in users[user_id]['tasks'][task_id]['descriptions']:
-    if i == max_inline_descriptions:
-      break
-    keyboard += [InlineKeyboardButton(description, callback_data = f'description:{i}')],
-    i += 1
+  for description_name in get_description_names_sorted(users, user_id, task_id)[:max_inline_descriptions]:
+    description_id = get_description_id(users, user_id, task_id, description_name)
+    keyboard += [InlineKeyboardButton(description_name, callback_data = f'description:{description_id}')],
   keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
   reply_markup = InlineKeyboardMarkup(keyboard)
   return reply_markup
@@ -1281,16 +1407,14 @@ def get_descriptions_reply_markup(users, user_id, task_id):
 def handle_description_query(users, user_id, query):
   if users[user_id]['active_task']:
     try:
-      description_number = int(query)
+      description_id = query
       task_id = users[user_id]['active_task']['id']
-      description = users[user_id]['tasks'][task_id]['descriptions'][description_number]
-      users[user_id]['tasks'][task_id]['descriptions'].remove(description)
-      users[user_id]['tasks'][task_id]['descriptions'].insert(0, description)
-      users[user_id]['active_task']['description'] = description
+      description_name = users[user_id]['tasks'][task_id]['descriptions'][description_id]['name']
+      users[user_id]['active_task']['description'] = description_name
       db.write('users', users)
-      temp_vars[user_id]['task_description'] = description
-      return f'Description: {description}', None
-    except ValueError:
+      temp_vars[user_id]['task_description'] = description_name
+      return f'Description: {description_name}', None
+    except KeyError:
       if query == 'new':
         tgbot.send_message(user_id, 'Type new description\n/cancel', keyboard=[])
         change_state(users, user_id, 'new_task_description')
@@ -1298,27 +1422,15 @@ def handle_description_query(users, user_id, query):
   else:
     return 'No active task', None
 
-def add_description(users, user_id, description, entry_type):
-  max_descriptions = 99
+def new_description(users, user_id, description_name, entry_type):
   if entry_type == 'task':
-    entry_id = users[user_id]['active_task']['id']
+    users[user_id]['active_task']['description'] = description_name
+    temp_vars[user_id]['task_description'] = description_name
   elif entry_type == 'context':
-    entry_id = users[user_id]['active_context']['id']
-  if description in users[user_id]['tasks'][entry_id]['descriptions']:
-    users[user_id]['tasks'][entry_id]['descriptions'].remove(description)
-    users[user_id]['tasks'][entry_id]['descriptions'].insert(0, description)
-  else:
-    users[user_id]['tasks'][entry_id]['descriptions'].insert(0, description)
-    while len(users[user_id]['tasks'][entry_id]['descriptions']) > max_descriptions:
-      users[user_id]['tasks'][entry_id]['descriptions'].pop(-1)
-  if entry_type == 'task':
-    users[user_id]['active_task']['description'] = description
-    temp_vars[user_id]['task_description'] = description
-  elif entry_type == 'context':
-    users[user_id]['active_context']['description'] = description
-    temp_vars[user_id]['context_description'] = description
+    users[user_id]['active_context']['description'] = description_name
+    temp_vars[user_id]['context_description'] = description_name
   db.write('users', users)
-  return f'Current {entry_type}: {get_name(users, user_id, "task", entry_id)}\nDescription: {description}'
+  return f'New description: {description_name}'
 
 def get_tags_reply_markup(users, user_id, entry_id):
   entry_name = get_name(users, user_id, 'all', entry_id)
@@ -1397,14 +1509,14 @@ def menu_handler(user_id, text):
 
   # STATE - new_task_description
   if state == 'new_task_description':
-    reply = add_description(users, user_id, text, 'task')
+    reply = new_description(users, user_id, text, 'task')
     tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
     get_new_timer(user_id)
 
   # STATE - new_context_description
   elif state == 'new_context_description':
-    reply = add_description(users, user_id, text, 'context')
+    reply = new_description(users, user_id, text, 'context')
     tgbot.send_message(user_id, reply, keyboard=get_main_menu(users, user_id))
     change_state(users, user_id, 'main_menu')
     get_new_timer(user_id)
@@ -1764,7 +1876,7 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('task_description'):
       if users[user_id]['active_task']:
         task_id = users[user_id]['active_task']['id']
-        descriptions = users[user_id]['tasks'][task_id]['descriptions']
+        descriptions = get_description_names_sorted(users, user_id, task_id)
         tgbot.send_message(user_id, 'Task description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
         change_state(users, user_id, 'new_task_description')
       else:
@@ -1774,7 +1886,7 @@ def menu_handler(user_id, text):
     elif button_name == constants.get_name('context_description'):
       if users[user_id]['active_context']:
         context_id = users[user_id]['active_context']['id']
-        descriptions = users[user_id]['tasks'][context_id]['descriptions']
+        descriptions = get_description_names_sorted(users, user_id, context_id)
         tgbot.send_message(user_id, 'Context description\n/cancel', keyboard=get_options_keyboard(descriptions, columns=1))
         change_state(users, user_id, 'new_context_description')
       else:
@@ -1838,6 +1950,10 @@ def menu_handler(user_id, text):
 
     elif button_name == constants.get_name('entry_info'):
       report, reply_markup = handle_info_query(users, user_id)
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+
+    elif button_name == constants.get_name('description_info'):
+      report, reply_markup = handle_description_info_query(users, user_id)
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('add_place'):
