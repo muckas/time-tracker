@@ -327,6 +327,47 @@ def generate_task_totals(force, dry_run):
       log.info(f'File not found, skipping user {user_id}')
   log.info(f'Generated a total of {total_entries} entries for {len(users)} users')
 
+def generate_descriptions(no_dry_run):
+  log.info('---------------------------')
+  log.info('Started description generation')
+  total_entries = 0
+  users = db.read('users')
+  for user_id in users:
+    if no_dry_run:
+      log.info('Cleaning descriptions')
+      for task_id in users[user_id]['tasks'].keys():
+        users[user_id]['tasks'][task_id].update({'descriptions':{}})
+      db.write('users', users)
+    else:
+      log.info('Dry run! NOT writing changes')
+    try:
+      task_list_path = os.path.join('data', user_id, f'tasks-{user_id}')
+      context_list_path = os.path.join('data', user_id, f'context-{user_id}')
+      files = [task_list_path, context_list_path]
+      for filename in files:
+        tasks = db.read(filename)
+        if tasks:
+          log.info(f'Generating descriptions from {filename} for user {user_id}')
+          user_entries = 0
+          for event_id in tasks:
+            task_id = str(tasks[event_id]['id'])
+            description = tasks[event_id]['description']
+            start_time = tasks[event_id]['start']
+            end_time = tasks[event_id]['end']
+            description_name = tasks[event_id]['description']
+            if no_dry_run:
+              logic.write_task_description(users, user_id, task_id, description_name, start_time, end_time)
+            total_entries += 1
+            user_entries += 1
+          log.info(f'{user_entries} scanned entries for user {user_id}')
+    except FileNotFoundError:
+      log.info(f'File not found, skipping user {user_id}')
+  if no_dry_run:
+    log.info('Changes were written!')
+  else:
+    log.info('Dry run! Changes were NOT written')
+  log.info(f'Scanned a total of {total_entries} entries for {len(users)} users')
+
 @easyargs
 class DButils(object):
   """Database utility"""
@@ -356,6 +397,15 @@ class DButils(object):
     '''
     db.archive('generate_calendars')
     generate_calendars(force, dry_run)
+
+  def generate_descriptions(self, no_dry_run=False):
+    '''
+    Generate descriptions
+    :param no_dry_run: Write changes
+    '''
+    if no_dry_run:
+      db.archive('generate_descriptions')
+    generate_descriptions(no_dry_run)
 
   # DATA removed in v0.9.0
   # def generate_task_lists(self, force=False, dry_run=False):
