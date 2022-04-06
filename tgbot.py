@@ -133,6 +133,7 @@ def callback_handler(update, context):
   users = db.read('users')
   query = update.callback_query
   user_id = str(query.message.chat_id)
+  log.info(f'Query from user {user_id}: {query.data}')
   logic.check_temp_vars(user_id)
   function, option = query.data.split(':')
   if function == 'stats':

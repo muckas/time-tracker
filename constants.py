@@ -23,6 +23,11 @@ def get_temp_vars():
       'chosen_description_id':0,
       }
 
+def builtin_tags():
+  return [
+      'context',
+      ]
+
 def get_default_user(tg_username):
   return {
       'username':tg_username,
@@ -39,6 +44,9 @@ def get_default_user(tg_username):
       'places':{},
       'tags':{
         str(uuid.uuid4()):get_default_tag('context', ['context',]),
+        },
+      'options':{
+        'tag_sort': False,
         },
       }
 
@@ -127,6 +135,10 @@ def get_name(name):
     'now':'Now',
     'show_disabled':'Show disabled',
     'show_enabled':'Show enabled',
+    'skip_tag_selection':'Skip tag selection',
+    'back_to_tags':'Back to tags',
+
+    'tag_sort':'Tag sort: ',
 
     'entry_stats':'Total statistics',
     'entry_info':'Entry info',
