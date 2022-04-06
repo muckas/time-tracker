@@ -375,7 +375,7 @@ def get_disabled_entries(users, user_id, info_type):
       disabled_entries.append(entry_id)
   return disabled_entries
 
-def get_enabled_names(users, user_id, info_type):
+def get_enabled_entry_names(users, user_id, info_type):
   if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
@@ -386,7 +386,7 @@ def get_enabled_names(users, user_id, info_type):
       enabled_entries.append(entry_list[entry_id]['name'])
   return enabled_entries
 
-def get_disabled_names(users, user_id, info_type):
+def get_disabled_entry_names(users, user_id, info_type):
   if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
@@ -397,7 +397,7 @@ def get_disabled_names(users, user_id, info_type):
       disabled_entries.append(entry_list[entry_id]['name'])
   return disabled_entries
 
-def get_all(users, user_id, info_type):
+def get_all_entries(users, user_id, info_type):
   if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
@@ -406,7 +406,7 @@ def get_all(users, user_id, info_type):
     entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   return entry_list.keys()
 
-def get_all_names(users, user_id, info_type):
+def get_all_entry_names(users, user_id, info_type):
   if info_type in ('task', 'tasks',):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
@@ -497,7 +497,7 @@ def get_tag_id(users, user_id, name):
   return None
 
 def add_task(users, user_id, task_name, enabled=True):
-  if task_name in get_all_names(users, user_id, 'task'):
+  if task_name in get_all_entry_names(users, user_id, 'task'):
     task_id = get_entry_id(users, user_id, 'task', task_name)
     if users[user_id]['tasks'][task_id]['enabled']:
       return None
@@ -704,7 +704,7 @@ def update_task_totals(users, user_id, task_id, tz_start_time, tz_end_time, tota
     return
 
 def add_place(users, user_id, place_name, enabled=True):
-  if place_name in get_all_names(users, user_id, 'place'):
+  if place_name in get_all_entry_names(users, user_id, 'place'):
     place_id = get_entry_id(users, user_id, 'place', place_name)
     if users[user_id]['places'][place_id]['enabled']:
       return None
@@ -1114,7 +1114,7 @@ def handle_stats_query(users, user_id, option=None):
     stats_sort_button = InlineKeyboardButton('by entry', callback_data='stats:by-entry')
 
   if stats_type == 'detailed':
-    entries = get_all(users, user_id, stats_info)
+    entries = get_all_entries(users, user_id, stats_info)
     entry_list = users[user_id][stats_info]
     report = 'Detailed statistics:\n--------------------'
     for entry_id in entries:
@@ -1139,7 +1139,7 @@ def handle_stats_query(users, user_id, option=None):
   elif stats_type == 'alltime':
     if stats_sort == 'by-entry':
       report = 'All time statistics by entry\n--------------------'
-      entries = get_all(users, user_id, stats_info)
+      entries = get_all_entries(users, user_id, stats_info)
       entry_list = users[user_id][stats_info]
       for entry_id in entries:
         entry_info = entry_list[entry_id]
@@ -1562,7 +1562,7 @@ def menu_handler(user_id, text):
   # STATE - start_task_time
   if state == 'start_task_time':
     if text == constants.get_name('show_disabled'):
-      tasks = get_disabled_names(users, user_id, 'task')
+      tasks = get_disabled_entry_names(users, user_id, 'task')
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         keyboard += [constants.get_name('show_enabled')],
@@ -1570,7 +1570,7 @@ def menu_handler(user_id, text):
       else:
         tgbot.send_message(user_id, 'No disabled tasks\n/cancel')
     elif text == constants.get_name('show_enabled'):
-      tasks = get_enabled_names(users, user_id, 'task')
+      tasks = get_enabled_entry_names(users, user_id, 'task')
       keyboard = get_options_keyboard(tasks, columns=3)
       keyboard += [constants.get_name('show_disabled')],
       tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
@@ -1729,7 +1729,7 @@ def menu_handler(user_id, text):
   # STATE - change_place_time
   if state == 'change_place_time':
     if text == constants.get_name('show_disabled'):
-      places = get_disabled_names(users, user_id, 'place')
+      places = get_disabled_entry_names(users, user_id, 'place')
       if places:
         keyboard = get_options_keyboard(places, columns=3)
         keyboard += [constants.get_name('show_enabled')],
@@ -1737,7 +1737,7 @@ def menu_handler(user_id, text):
       else:
         tgbot.send_message(user_id, 'No disabled places\n/cancel')
     elif text == constants.get_name('show_enabled'):
-      places = get_enabled_names(users, user_id, 'place')
+      places = get_enabled_entry_names(users, user_id, 'place')
       keyboard = get_options_keyboard(places, columns=3)
       keyboard += [constants.get_name('show_disabled')],
       tgbot.send_message(user_id, 'Choose a new place\n/cancel', keyboard=keyboard)
@@ -1894,7 +1894,7 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'main_menu')
 
     elif button_name == constants.get_name('start_task'):
-      tasks = get_enabled_names(users, user_id, 'task')
+      tasks = get_enabled_entry_names(users, user_id, 'task')
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         keyboard += [constants.get_name('show_disabled')],
@@ -1908,7 +1908,7 @@ def menu_handler(user_id, text):
       change_state(users, user_id, 'add_task')
 
     elif button_name == constants.get_name('remove_task'):
-      tasks = get_enabled_names(users, user_id, 'task')
+      tasks = get_enabled_entry_names(users, user_id, 'task')
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to disable\n/cancel', keyboard=keyboard)
@@ -1917,7 +1917,7 @@ def menu_handler(user_id, text):
         tgbot.send_message(user_id, "No enabled tasks")
 
     elif button_name == constants.get_name('enable_task'):
-      tasks = get_disabled_names(users, user_id, 'task')
+      tasks = get_disabled_entry_names(users, user_id, 'task')
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to enable\n/cancel', keyboard=keyboard)
@@ -1926,7 +1926,7 @@ def menu_handler(user_id, text):
         tgbot.send_message(user_id, "No disabled tasks")
 
     elif button_name == constants.get_name('task_tags'):
-      tasks = get_all_names(users, user_id, 'task')
+      tasks = get_all_entry_names(users, user_id, 'task')
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a task to edit\n/cancel', keyboard=keyboard)
@@ -1935,7 +1935,7 @@ def menu_handler(user_id, text):
         tgbot.send_message(user_id, "You have no tasks")
 
     elif button_name == constants.get_name('place_tags'):
-      tasks = get_all_names(users, user_id, 'place')
+      tasks = get_all_entry_names(users, user_id, 'place')
       if tasks:
         keyboard = get_options_keyboard(tasks, columns=3)
         tgbot.send_message(user_id, 'Choose a place to edit\n/cancel', keyboard=keyboard)
@@ -1961,7 +1961,7 @@ def menu_handler(user_id, text):
       change_state(users, user_id, 'add_place')
 
     elif button_name == constants.get_name('disable_place'):
-      places = get_enabled_names(users, user_id, 'place')
+      places = get_enabled_entry_names(users, user_id, 'place')
       if places:
         keyboard = get_options_keyboard(places, columns=3)
         tgbot.send_message(user_id, 'Choose a place to disable\n/cancel', keyboard=keyboard)
@@ -1970,7 +1970,7 @@ def menu_handler(user_id, text):
         tgbot.send_message(user_id, "No enabled places")
 
     elif button_name == constants.get_name('enable_place'):
-      places = get_disabled_names(users, user_id, 'place')
+      places = get_disabled_entry_names(users, user_id, 'place')
       if places:
         keyboard = get_options_keyboard(places, columns=3)
         tgbot.send_message(user_id, 'Choose a place to enable\n/cancel', keyboard=keyboard)
@@ -2027,7 +2027,7 @@ def menu_handler(user_id, text):
 
       # Button change_place
       elif button_name[:place_string_len] == place_string:
-        places = get_enabled_names(users, user_id, 'place')
+        places = get_enabled_entry_names(users, user_id, 'place')
         if places:
           if users[user_id]['active_place']:
             active_place_id = users[user_id]['active_place']['id']
