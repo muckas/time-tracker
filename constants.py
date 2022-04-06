@@ -6,6 +6,7 @@ def get_temp_vars():
   return {
       'state':'main_menu',
       'menu_state':'menu_main',
+
       'timer_message':None,
       'task_start':None,
       'task_name':None,
@@ -13,14 +14,20 @@ def get_temp_vars():
       'context_start':None,
       'context_name':None,
       'context_description':None,
+      'place_name':None,
+
       'stats_delta':0,
       'stats_info':'tasks',
       'stats_sort':'by-entry',
-      'place_name':None,
+
       'tag_editor_entry_id':None,
       'tag_editor_active_tags':[],
+
       'chosen_entry_id':0,
       'chosen_description_id':0,
+
+      'order_editor_type':None,
+      'order_editor_ids':[],
       }
 
 def builtin_tags():
@@ -121,6 +128,9 @@ def get_name(name):
     'disable_menu':'Hide menu',
     'set_timezone':'Set timezone',
     'get_timer':'Timer',
+    'order_editor':'Entry order editor',
+
+    'tag_sort':'Tag sort: ',
 
     'menu_main':'Main',
     'menu_ext':'Ext',
@@ -137,8 +147,6 @@ def get_name(name):
     'show_enabled':'Show enabled',
     'skip_tag_selection':'Skip tag selection',
     'back_to_tags':'Back to tags',
-
-    'tag_sort':'Tag sort: ',
 
     'entry_stats':'Total statistics',
     'entry_info':'Entry info',
