@@ -1680,8 +1680,7 @@ def menu_handler(user_id, text):
       keyboard += [constants.get_name('show_disabled')],
       tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
     elif text == constants.get_name('back_to_tags'):
-      tags = set(get_all_tags_names(users, user_id, enabled_only=True)) - set(constants.builtin_tags())
-      tags = list(tags)
+      tags = subtract_lists(get_all_tags_names(users, user_id, enabled_only=True), constants.builtin_tags())
       for tag_name in tags:
         if len(get_entry_names_with_tags(users, user_id, 'tasks', tags=[tag_name])) == 0:
           tags.remove(tag_name)
