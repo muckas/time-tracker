@@ -40,6 +40,9 @@ def get_default_user(tg_username):
       'tags':{
         str(uuid.uuid4()):get_default_tag('context', ['context',]),
         },
+      'settings':{
+        'tag_sort': False,
+        },
       }
 
 def get_default_task(name):
@@ -127,6 +130,8 @@ def get_name(name):
     'now':'Now',
     'show_disabled':'Show disabled',
     'show_enabled':'Show enabled',
+
+    'tag_sort':'Tag sort: ',
 
     'entry_stats':'Total statistics',
     'entry_info':'Entry info',

@@ -208,9 +208,7 @@ def get_main_menu(users, user_id):
     keyboard = [
         [constants.get_name('set_timezone')],
         [
-          constants.get_name('add_tag'),
-          constants.get_name('enable_tag'),
-          constants.get_name('disable_tag'),
+          constants.get_name('tag_sort') + str(users[user_id]['settings']['tag_sort']),
         ],
         [
           constants.get_name('menu_main'),
@@ -2048,6 +2046,14 @@ def menu_handler(user_id, text):
         keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
         tgbot.send_message(user_id, f'When to stop {task_name}?\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
+
+      # Button tag_sort
+      elif button_name[:len(constants.get_name('tag_sort'))] == constants.get_name('tag_sort'):
+        value = users[user_id]['settings']['tag_sort']
+        users[user_id]['settings']['tag_sort'] = not value
+        db.write('users', users)
+        tgbot.send_message(user_id, f'Tag sort = {value}', keyboard=get_main_menu(users, user_id))
+        change_state(users, user_id, 'main_menu')
 
       else: # No mathed button
         tgbot.send_message(user_id, 'Error, try again', keyboard=get_main_menu(users, user_id))
