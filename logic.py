@@ -24,6 +24,12 @@ def timezoned(users, user_id, timestamp):
   delta = 60 * 60 * users[user_id]['timezone']
   return timestamp + delta
 
+def subtract_lists(list1, list2):
+  for item in list2:
+    if item in list1:
+      list1.remove(item)
+  return list1
+
 def send_calendar(user_id):
   date = datetime.datetime.now().date()
   file_path = os.path.join('db', 'data', user_id, f'tasks-calendar-{user_id}.ics')
@@ -913,7 +919,7 @@ def handle_order_editor_query(users, user_id, query='0|start|0'):
   elif command == 'save':
     if entry_ids and entry_type:
       current_entry_ids = list(users[user_id][entry_type].keys())
-      inline_entry_list = list(set(current_entry_ids) - set(entry_ids))
+      inline_entry_list = subtract_lists(current_entry_ids, entry_ids)
       if len(inline_entry_list) == 0:
         text = f'New order of {entry_type}\n======================'
         new_entry_dict = {}
@@ -945,7 +951,7 @@ def handle_order_editor_query(users, user_id, query='0|start|0'):
       text += '\n' + get_entry_name(users, user_id, entry_type, entry_id)
     text += f'\np. {page+1}'
     current_entry_ids = list(users[user_id][entry_type].keys())
-    inline_entry_list = list(set(current_entry_ids) - set(entry_ids))
+    inline_entry_list = subtract_lists(current_entry_ids, entry_ids)
     # Keyboard generation
     if inline_entry_list:
       options_dict = {}
@@ -2019,8 +2025,7 @@ def menu_handler(user_id, text):
         change_state(users, user_id, 'main_menu')
 
     elif button_name == constants.get_name('start_task'):
-      tags = set(get_all_tags_names(users, user_id, enabled_only=True)) - set(constants.builtin_tags())
-      tags = list(tags)
+      tags = subtract_lists(get_all_tags_names(users, user_id, enabled_only=True), constants.builtin_tags())
       for tag_name in tags:
         if len(get_entry_names_with_tags(users, user_id, 'tasks', tags=[tag_name])) == 0:
           tags.remove(tag_name)
