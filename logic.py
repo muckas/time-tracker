@@ -209,6 +209,7 @@ def get_main_menu(users, user_id):
         [constants.get_name('set_timezone')],
         [
           constants.get_name('tag_sort') + str(get_user_option(users, user_id, 'tag_sort')),
+          constants.get_name('order_editor'),
         ],
         [
           constants.get_name('menu_main'),
@@ -340,6 +341,8 @@ def get_entry_id(users, user_id, info_type, info_name):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('tag', 'tags',):
+    entry_list = users[user_id]['tags']
   elif info_type in ('all',):
     entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   for entry_id in entry_list:
@@ -352,6 +355,8 @@ def get_entry_name(users, user_id, info_type, info_id):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('tag', 'tags',):
+    entry_list = users[user_id]['tags']
   elif info_type in ('all',):
     entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   if info_id in entry_list.keys():
@@ -408,6 +413,8 @@ def get_all_entries(users, user_id, info_type):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('tag', 'tags',):
+    entry_list = users[user_id]['tags']
   elif info_type in ('all',):
     entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   return entry_list.keys()
@@ -417,6 +424,8 @@ def get_all_entry_names(users, user_id, info_type):
     entry_list = users[user_id]['tasks']
   elif info_type in ('place', 'places',):
     entry_list = users[user_id]['places']
+  elif info_type in ('tag', 'tags',):
+    entry_list = users[user_id]['tags']
   elif info_type in ('all',):
     entry_list = dict(users[user_id]['tasks'], **users[user_id]['places'])
   all_entries = []
@@ -880,6 +889,88 @@ def add_tag(users, user_id, tag_name, enabled=True):
     users[user_id]['tags'][new_tag_id]['enabled'] = enabled
     db.write('users', users)
     return f'Added tag "{tag_name}"'
+
+def handle_order_editor_query(users, user_id, query='0|start|0'):
+  query_name = 'order'
+  available_types = ['tasks', 'places', 'tags']
+  page_entries = 9
+  columns = 3
+  page, command, query_entry = query.split('|')
+  entry_type = temp_vars[user_id]['order_editor_type']
+  entry_ids = temp_vars[user_id]['order_editor_ids']
+  page = int(page)
+  if page < 0: page = 0
+  # Last row start
+  last_row = InlineKeyboardButton('<', callback_data=f'{query_name}:{page-1}|page|0'),
+  last_row += InlineKeyboardButton('Restart', callback_data=f'{query_name}:0|start|0'),
+  last_row += InlineKeyboardButton('>', callback_data=f'{query_name}:{page+1}|page|0'),
+  # Last row end
+  text = 'Entry order editor\n======================'
+  keyboard = []
+  if command == 'start':
+    entry_type = temp_vars[user_id]['order_editor_type'] = None
+    entry_ids = temp_vars[user_id]['order_editor_ids'] = []
+  elif command == 'save':
+    if entry_ids and entry_type:
+      current_entry_ids = list(users[user_id][entry_type].keys())
+      inline_entry_list = list(set(current_entry_ids) - set(entry_ids))
+      if len(inline_entry_list) == 0:
+        text = f'New order of {entry_type}\n======================'
+        new_entry_dict = {}
+        for entry_id in entry_ids:
+          text += '\n' + users[user_id][entry_type][entry_id]['name']
+          new_entry_dict.update({entry_id:users[user_id][entry_type][entry_id]})
+        users[user_id][entry_type] = new_entry_dict
+        db.write('users', users)
+        entry_type = temp_vars[user_id]['order_editor_type'] = None
+        entry_ids = temp_vars[user_id]['order_editor_ids'] = []
+        return text, None
+      else:
+        return 'Error', None
+    else:
+      return 'Error', None
+  elif command == 'page':
+    pass
+  elif command == entry_type and query_entry != '0':
+      entry_ids.append(query_entry)
+      temp_vars[user_id]['order_editor_ids'] = entry_ids
+  elif entry_type == None and query_entry == '0':
+    entry_type = temp_vars[user_id]['order_editor_type'] = command
+    entry_ids = temp_vars[user_id]['order_editor_ids'] = []
+  else:
+    return 'Error', None
+  if entry_type:
+    text = f'Entry order editor: {entry_type}\n======================'
+    for entry_id in entry_ids:
+      text += '\n' + get_entry_name(users, user_id, entry_type, entry_id)
+    text += f'\np. {page+1}'
+    current_entry_ids = list(users[user_id][entry_type].keys())
+    inline_entry_list = list(set(current_entry_ids) - set(entry_ids))
+    # Keyboard generation
+    if inline_entry_list:
+      options_dict = {}
+      entry_slice_start = page * page_entries
+      entry_slice_end = entry_slice_start + page_entries
+      entry_page = inline_entry_list[entry_slice_start:entry_slice_end]
+      for entry_id in entry_page:
+        entry_name = users[user_id][entry_type][entry_id]['name']
+        options_dict.update({entry_name:f'{query_name}:{page}|{entry_type}|{entry_id}'})
+      keyboard = get_inline_options_keyboard(options_dict, columns)
+      keyboard.append(last_row)
+    else:
+      options_dict = {
+          'Save order':f'{query_name}:{page}|save|0',
+          'Restart':f'{query_name}:{page}|start|0',
+          }
+      keyboard = get_inline_options_keyboard(options_dict, columns=2)
+  else:
+    text += '\nChoose entries to edit'
+    options_dict = {}
+    for option in available_types:
+      options_dict.update({option:f'{query_name}:0|{option}|0'})
+    keyboard = get_inline_options_keyboard(options_dict, columns=1)
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return text, reply_markup
 
 def get_entry_info(users, user_id, entry_id):
     if entry_id in users[user_id]['tasks'].keys():
@@ -1999,6 +2090,10 @@ def menu_handler(user_id, text):
 
     elif button_name == constants.get_name('description_info'):
       report, reply_markup = handle_description_info_query(users, user_id)
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+
+    elif button_name == constants.get_name('order_editor'):
+      report, reply_markup = handle_order_editor_query(users, user_id)
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('add_place'):
