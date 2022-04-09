@@ -54,6 +54,7 @@ def get_default_user(tg_username):
         },
       'options':{
         'tag_sort': False,
+        'exclusive_context': False,
         },
       }
 
@@ -130,8 +131,6 @@ def get_name(name):
     'get_timer':'Timer',
     'order_editor':'Entry order editor',
     'options_editor':'Options editor',
-
-    'tag_sort':'Tag sort: ',
 
     'menu_main':'Main',
     'menu_ext':'Ext',
