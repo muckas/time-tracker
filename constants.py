@@ -129,6 +129,7 @@ def get_name(name):
     'set_timezone':'Set timezone',
     'get_timer':'Timer',
     'order_editor':'Entry order editor',
+    'options_editor':'Options editor',
 
     'tag_sort':'Tag sort: ',
 

@@ -214,7 +214,7 @@ def get_main_menu(users, user_id):
     keyboard = [
         [constants.get_name('set_timezone')],
         [
-          constants.get_name('tag_sort') + str(get_user_option(users, user_id, 'tag_sort')),
+          constants.get_name('options_editor'),
           constants.get_name('order_editor'),
         ],
         [
@@ -895,6 +895,19 @@ def add_tag(users, user_id, tag_name, enabled=True):
     users[user_id]['tags'][new_tag_id]['enabled'] = enabled
     db.write('users', users)
     return f'Added tag "{tag_name}"'
+
+def handle_options_editor_query(users, user_id, query=None):
+  query_name = 'options'
+  text = 'Options editor\n================'
+  options_dict = {}
+  if query == 'tag_sort':
+    set_user_option(users, user_id, query, not get_user_option(users, user_id, query))
+  for option_name in users[user_id]['options'].keys():
+    option_value = get_user_option(users, user_id, option_name)
+    options_dict.update({f'{option_name} = {option_value}':f'{query_name}:{option_name}'})
+  keyboard = get_inline_options_keyboard(options_dict, columns=1)
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return text, reply_markup
 
 def handle_order_editor_query(users, user_id, query='0|start|0'):
   query_name = 'order'
@@ -2100,6 +2113,10 @@ def menu_handler(user_id, text):
       report, reply_markup = handle_order_editor_query(users, user_id)
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
+    elif button_name == constants.get_name('options_editor'):
+      report, reply_markup = handle_options_editor_query(users, user_id)
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+
     elif button_name == constants.get_name('add_place'):
       tgbot.send_message(user_id, 'Name a place\n/cancel', keyboard = [])
       change_state(users, user_id, 'add_place')
@@ -2192,13 +2209,6 @@ def menu_handler(user_id, text):
         keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
         tgbot.send_message(user_id, f'When to stop {task_name}?\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
-
-      # Button tag_sort
-      elif button_name[:len(constants.get_name('tag_sort'))] == constants.get_name('tag_sort'):
-        value = get_user_option(users, user_id, 'tag_sort')
-        set_user_option(users, user_id, 'tag_sort', not value)
-        tgbot.send_message(user_id, f'Tag sort = {not value}', keyboard=get_main_menu(users, user_id))
-        change_state(users, user_id, 'main_menu')
 
       else: # No mathed button
         tgbot.send_message(user_id, 'Error, try again', keyboard=get_main_menu(users, user_id))
