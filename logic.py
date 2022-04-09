@@ -214,7 +214,7 @@ def get_main_menu(users, user_id):
     keyboard = [
         [constants.get_name('set_timezone')],
         [
-          constants.get_name('tag_sort') + str(get_user_option(users, user_id, 'tag_sort')),
+          constants.get_name('options_editor'),
           constants.get_name('order_editor'),
         ],
         [
@@ -895,6 +895,21 @@ def add_tag(users, user_id, tag_name, enabled=True):
     users[user_id]['tags'][new_tag_id]['enabled'] = enabled
     db.write('users', users)
     return f'Added tag "{tag_name}"'
+
+def handle_options_editor_query(users, user_id, query=None):
+  query_name = 'options'
+  text = 'Options editor'
+  options_dict = {}
+  if query == None:
+    pass
+  else:
+    set_user_option(users, user_id, query, not get_user_option(users, user_id, query))
+  for option_name in users[user_id]['options'].keys():
+    option_value = get_user_option(users, user_id, option_name)
+    options_dict.update({f'{option_name} = {option_value}':f'{query_name}:{option_name}'})
+  keyboard = get_inline_options_keyboard(options_dict, columns=1)
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return text, reply_markup
 
 def handle_order_editor_query(users, user_id, query='0|start|0'):
   query_name = 'order'
@@ -1612,6 +1627,25 @@ def menu_handler(user_id, text):
   users = db.read('users')
   state = temp_vars[user_id]['state']
 
+  def get_tasks_keyboard(enabled=None, tags=[]):
+    if enabled == True:
+      tasks = get_enabled_entry_names(users, user_id, 'tasks')
+      last_row = [constants.get_name('show_disabled')],
+    elif enabled == False:
+      tasks = get_disabled_entry_names(users, user_id, 'tasks')
+      last_row = [constants.get_name('show_enabled')],
+    elif tags:
+      tasks = get_entry_names_with_tags(users, user_id, 'tasks', tags)
+      last_row = [constants.get_name('back_to_tags')],
+    if get_user_option(users, user_id, 'exclusive_context'):
+      tasks = subtract_lists(tasks, get_entry_names_with_tags(users, user_id, 'tasks', ['context']))
+    if tasks:
+      keyboard = get_options_keyboard(tasks, columns=3)
+      keyboard += last_row
+      return keyboard
+    else:
+      return None
+
   # STATE - new_task_description
   if state == 'new_task_description':
     reply = new_description(users, user_id, text, 'task')
@@ -1667,21 +1701,16 @@ def menu_handler(user_id, text):
   # STATE - start_task_time
   if state == 'start_task_time':
     if text == constants.get_name('show_disabled'):
-      tasks = get_disabled_entry_names(users, user_id, 'task')
-      if tasks:
-        keyboard = get_options_keyboard(tasks, columns=3)
-        keyboard += [constants.get_name('show_enabled')],
+      keyboard = get_tasks_keyboard(enabled=False)
+      if keyboard:
         tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
       else:
         tgbot.send_message(user_id, 'No disabled tasks\n/cancel')
     elif text == constants.get_name('show_enabled'):
-      tasks = get_enabled_entry_names(users, user_id, 'task')
-      keyboard = get_options_keyboard(tasks, columns=3)
-      keyboard += [constants.get_name('show_disabled')],
+      keyboard = get_tasks_keyboard(enabled=True)
       tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
     elif text == constants.get_name('back_to_tags'):
-      tags = set(get_all_tags_names(users, user_id, enabled_only=True)) - set(constants.builtin_tags())
-      tags = list(tags)
+      tags = subtract_lists(get_all_tags_names(users, user_id, enabled_only=True), constants.builtin_tags())
       for tag_name in tags:
         if len(get_entry_names_with_tags(users, user_id, 'tasks', tags=[tag_name])) == 0:
           tags.remove(tag_name)
@@ -1699,16 +1728,15 @@ def menu_handler(user_id, text):
   # STATE - start_task_tag
   if state == 'start_task_tag':
     if text == constants.get_name('skip_tag_selection'):
-      tasks = get_enabled_entry_names(users, user_id, 'task')
-      keyboard = get_options_keyboard(tasks, columns=3)
-      keyboard += [constants.get_name('show_disabled')],
-      tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
-      change_state(users, user_id, 'start_task_time')
+      keyboard = get_tasks_keyboard(enabled=True)
+      if keyboard:
+        tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
+        change_state(users, user_id, 'start_task_time')
+      else:
+        tgbot.send_message(user_id, 'No enabled tasks')
     else:
       tag_name = text
-      tasks = get_entry_names_with_tags(users, user_id, 'task', tags=[tag_name])
-      keyboard = get_options_keyboard(tasks, columns=3)
-      keyboard += [constants.get_name('back_to_tags')],
+      keyboard = get_tasks_keyboard(tags=[tag_name])
       tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
       change_state(users, user_id, 'start_task_time')
 
@@ -2035,10 +2063,8 @@ def menu_handler(user_id, text):
         tgbot.send_message(user_id, 'Choose a tag\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'start_task_tag')
       else:
-        tasks = get_enabled_entry_names(users, user_id, 'task')
-        if tasks:
-          keyboard = get_options_keyboard(tasks, columns=3)
-          keyboard += [constants.get_name('show_disabled')],
+        keyboard = get_tasks_keyboard(enabled=True)
+        if keyboard:
           tgbot.send_message(user_id, 'Choose a task to start\n/cancel', keyboard=keyboard)
           change_state(users, user_id, 'start_task_time')
         else:
@@ -2099,6 +2125,10 @@ def menu_handler(user_id, text):
 
     elif button_name == constants.get_name('order_editor'):
       report, reply_markup = handle_order_editor_query(users, user_id)
+      tgbot.send_message(user_id, report, reply_markup=reply_markup)
+
+    elif button_name == constants.get_name('options_editor'):
+      report, reply_markup = handle_options_editor_query(users, user_id)
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('add_place'):
@@ -2193,13 +2223,6 @@ def menu_handler(user_id, text):
         keyboard = [[constants.get_name('now')]] + get_options_keyboard(constants.get_time_presets(), columns=4)
         tgbot.send_message(user_id, f'When to stop {task_name}?\n/cancel', keyboard=keyboard)
         change_state(users, user_id, 'stop_task')
-
-      # Button tag_sort
-      elif button_name[:len(constants.get_name('tag_sort'))] == constants.get_name('tag_sort'):
-        value = get_user_option(users, user_id, 'tag_sort')
-        set_user_option(users, user_id, 'tag_sort', not value)
-        tgbot.send_message(user_id, f'Tag sort = {not value}', keyboard=get_main_menu(users, user_id))
-        change_state(users, user_id, 'main_menu')
 
       else: # No mathed button
         tgbot.send_message(user_id, 'Error, try again', keyboard=get_main_menu(users, user_id))

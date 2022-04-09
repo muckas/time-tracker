@@ -90,6 +90,13 @@ def check_users():
         users[user]['tags'][tag_id] = default_tags[tag_id]
         missing_total += 1
         log.info(f'Missing tag "{tag_name}", adding {tag_id}:{default_tags[tag_id]}')
+    log.info(f'Checking options')
+    for option in default_user['options']:
+      if option not in users[user]['options'].keys():
+        value = default_user['options'][option]
+        users[user]['options'].update({option:value})
+        missing_total += 1
+        log.info(f'Missing option "{option}", adding {option}:{value}')
   if missing_total > 0: db.write('users', users)
   log.info(f'Checked users.json, {missing_total} missing entries created')
   return missing_total

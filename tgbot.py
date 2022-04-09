@@ -148,6 +148,8 @@ def callback_handler(update, context):
     text, reply_markup = logic.handle_tags_query(users, user_id, option)
   elif function == 'order':
     text, reply_markup = logic.handle_order_editor_query(users, user_id, option)
+  elif function == 'options':
+    text, reply_markup = logic.handle_options_editor_query(users, user_id, option)
   else:
     text = 'Error'
     reply_markup = None
