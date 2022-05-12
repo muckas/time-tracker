@@ -658,7 +658,10 @@ def write_to_task_ical(users, user_id, event_id, task_id, task_description,
   else:
     task_duration /= 60 * 60
     task_duration = f' {task_duration:.1f}h'
-  summary = users[user_id]['tasks'][task_id]['name'] + task_duration
+  summary_description = ''
+  if task_description:
+    summary_description = f': {task_description}'
+  summary = f'{task_duration} {users[user_id]["tasks"][task_id]["name"]}{summary_description}'
   tzoffset_hours = timezone
   tzoffset_sec = tzoffset_hours * 60 * 60
   dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
