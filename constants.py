@@ -33,6 +33,7 @@ def get_temp_vars():
 def builtin_tags():
   return [
       'context',
+      'food',
       ]
 
 def get_default_user(tg_username):
@@ -51,6 +52,7 @@ def get_default_user(tg_username):
       'places':{},
       'tags':{
         str(uuid.uuid4()):get_default_tag('context', ['context',]),
+        str(uuid.uuid4()):get_default_tag('food', ['food',]),
         },
       'options':{
         'tag_sort': False,

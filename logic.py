@@ -49,6 +49,8 @@ Context calendar:
 {web_path}{web_key}/context.ics
 Places calendar:
 {web_path}{web_key}/places.ics
+Food calendar:
+{web_path}{web_key}/food.ics
 '''
     tgbot.send_message(user_id, text)
   else:
@@ -599,6 +601,8 @@ def write_task_to_diary(users, user_id, task_id, task_description,
     event_id = str(uuid.uuid4())
     write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time, context=context)
     write_to_task_ical(users, user_id, event_id, task_id, task_description, start_time, end_time, context=context)
+    if task_id in get_entry_ids_with_tags(users, user_id, 'tasks', tags=['food',]):
+      write_food_to_ical(users, user_id, str(uuid.uuid4()), task_id, task_description, start_time, end_time)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -655,6 +659,50 @@ def write_to_task_ical(users, user_id, event_id, task_id, task_description,
     task_duration /= 60 * 60
     task_duration = f' {task_duration:.1f}h'
   summary = users[user_id]['tasks'][task_id]['name'] + task_duration
+  tzoffset_hours = timezone
+  tzoffset_sec = tzoffset_hours * 60 * 60
+  dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
+  dtend = datetime.datetime.utcfromtimestamp(end_time + tzoffset_sec)
+  event = icalendar.Event()
+  event.add('UID', event_id)
+  event.add('summary', summary)
+  event.add('description', task_description)
+  event.add('tzoffset', tzoffset_hours)
+  event.add('dtstart', dtstart)
+  event.add('dtend', dtend)
+  cal.add_component(event)
+  log.debug(f'Added event {event_id} to calendar')
+  if ical_obj:
+    return cal
+  else:
+    with open(calendar_path, 'wb') as f:
+      log.debug(f'Writing to {calendar_path}')
+      f.write(cal.to_ical())
+    return
+
+def write_food_to_ical(users, user_id, event_id, task_id, task_description,
+                      start_time, end_time, ical_obj=None
+                      ):
+  calendar_name = f'food-calendar-{user_id}.ics'
+  calendar_path = os.path.join('db', 'data', user_id, calendar_name)
+  timezone = users[user_id]['timezone']
+  if ical_obj:
+    cal = ical_obj
+  else:
+    if os.path.isfile(calendar_path):
+      log.debug(f'Reading from {calendar_path}')
+      cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
+    else:
+      log.debug(f'Making new calendar')
+      cal = constants.get_new_calendar('Time-Tracker: Food', timezone)
+  task_duration = end_time - start_time
+  if task_duration < 60 * 60:
+    task_duration /= 60
+    task_duration = f'{int(task_duration)}m'
+  else:
+    task_duration /= 60 * 60
+    task_duration = f'{task_duration:.1f}h'
+  summary = f'{task_duration} {users[user_id]["tasks"][task_id]["name"]}: {task_description}'
   tzoffset_hours = timezone
   tzoffset_sec = tzoffset_hours * 60 * 60
   dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
