@@ -49,6 +49,8 @@ Context calendar:
 {web_path}{web_key}/context.ics
 Places calendar:
 {web_path}{web_key}/places.ics
+Food calendar:
+{web_path}{web_key}/food.ics
 '''
     tgbot.send_message(user_id, text)
   else:
@@ -599,6 +601,8 @@ def write_task_to_diary(users, user_id, task_id, task_description,
     event_id = str(uuid.uuid4())
     write_to_task_list(user_id, event_id, task_id, task_description, timezone, start_time, end_time, context=context)
     write_to_task_ical(users, user_id, event_id, task_id, task_description, start_time, end_time, context=context)
+    if task_id in get_entry_ids_with_tags(users, user_id, 'tasks', tags=['food',]):
+      write_food_to_ical(users, user_id, str(uuid.uuid4()), task_id, task_description, start_time, end_time)
   tzoffset = datetime.timezone(datetime.timedelta(hours=timezone))
   tz_start_time = timezoned(users, user_id, start_time)
   tz_end_time = timezoned(users, user_id, end_time)
@@ -654,7 +658,54 @@ def write_to_task_ical(users, user_id, event_id, task_id, task_description,
   else:
     task_duration /= 60 * 60
     task_duration = f' {task_duration:.1f}h'
-  summary = users[user_id]['tasks'][task_id]['name'] + task_duration
+  summary_description = ''
+  if task_description:
+    summary_description = f': {task_description}'
+  summary = f'{task_duration} {users[user_id]["tasks"][task_id]["name"]}{summary_description}'
+  tzoffset_hours = timezone
+  tzoffset_sec = tzoffset_hours * 60 * 60
+  dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
+  dtend = datetime.datetime.utcfromtimestamp(end_time + tzoffset_sec)
+  event = icalendar.Event()
+  event.add('UID', event_id)
+  event.add('summary', summary)
+  event.add('description', task_description)
+  event.add('tzoffset', tzoffset_hours)
+  event.add('dtstart', dtstart)
+  event.add('dtend', dtend)
+  cal.add_component(event)
+  log.debug(f'Added event {event_id} to calendar')
+  if ical_obj:
+    return cal
+  else:
+    with open(calendar_path, 'wb') as f:
+      log.debug(f'Writing to {calendar_path}')
+      f.write(cal.to_ical())
+    return
+
+def write_food_to_ical(users, user_id, event_id, task_id, task_description,
+                      start_time, end_time, ical_obj=None
+                      ):
+  calendar_name = f'food-calendar-{user_id}.ics'
+  calendar_path = os.path.join('db', 'data', user_id, calendar_name)
+  timezone = users[user_id]['timezone']
+  if ical_obj:
+    cal = ical_obj
+  else:
+    if os.path.isfile(calendar_path):
+      log.debug(f'Reading from {calendar_path}')
+      cal = icalendar.Calendar.from_ical(open(calendar_path, 'rb').read())
+    else:
+      log.debug(f'Making new calendar')
+      cal = constants.get_new_calendar('Time-Tracker: Food', timezone)
+  task_duration = end_time - start_time
+  if task_duration < 60 * 60:
+    task_duration /= 60
+    task_duration = f'{int(task_duration)}m'
+  else:
+    task_duration /= 60 * 60
+    task_duration = f'{task_duration:.1f}h'
+  summary = f'{task_duration} {users[user_id]["tasks"][task_id]["name"]}: {task_description}'
   tzoffset_hours = timezone
   tzoffset_sec = tzoffset_hours * 60 * 60
   dtstart = datetime.datetime.utcfromtimestamp(start_time + tzoffset_sec)
@@ -1512,33 +1563,59 @@ def get_description_names_sorted(users, user_id, task_id):
   else:
     return []
 
-def get_descriptions_reply_markup(users, user_id, task_id):
-  keyboard = []
-  max_inline_descriptions = 2
-  for description_name in get_description_names_sorted(users, user_id, task_id)[:max_inline_descriptions]:
-    description_id = get_description_id(users, user_id, task_id, description_name)
-    keyboard += [InlineKeyboardButton(description_name, callback_data = f'description:{description_id}')],
-  keyboard += [InlineKeyboardButton('New description', callback_data = 'description:new')],
-  reply_markup = InlineKeyboardMarkup(keyboard)
-  return reply_markup
-
-def handle_description_query(users, user_id, query):
-  if users[user_id]['active_task']:
-    try:
-      description_id = query
+def handle_description_query(users, user_id, query, query_name='desc_task'):
+  page_entries = 6
+  columns = 1
+  try:
+    if query_name == 'desc_task':
       task_id = users[user_id]['active_task']['id']
+      text = 'Task'
+    elif query_name == 'desc_context':
+      task_id = users[user_id]['active_context']['id']
+      text = 'Context'
+  except TypeError:
+    return 'Description error', None
+  page, description_id = query.split('|')
+  page = int(page)
+  if page < 0: page = 0
+  # Last row start
+  last_row = InlineKeyboardButton('<', callback_data=f'{query_name}:{page-1}|noid'),
+  last_row += InlineKeyboardButton('New', callback_data=f'{query_name}:{page}|new'),
+  last_row += InlineKeyboardButton('>', callback_data=f'{query_name}:{page+1}|noid'),
+  # Last row end
+  text += ' description: '
+  keyboard = []
+  if description_id == 'noid':
+    # Descriptions keyboard generation
+    options_dict = {}
+    description_slice_start = page * page_entries
+    description_slice_end = description_slice_start + page_entries
+    description_page = list(get_description_ids_sorted(users, user_id, task_id))
+    description_page = description_page[description_slice_start:description_slice_end]
+    for description_id in description_page:
       description_name = users[user_id]['tasks'][task_id]['descriptions'][description_id]['name']
-      users[user_id]['active_task']['description'] = description_name
-      db.write('users', users)
-      temp_vars[user_id]['task_description'] = description_name
-      return f'Description: {description_name}', None
-    except KeyError:
-      if query == 'new':
-        tgbot.send_message(user_id, 'Type new description\n/cancel', keyboard=[])
-        change_state(users, user_id, 'new_task_description')
-      return 'New description', None
+      options_dict.update({description_name:f'{query_name}:{page}|{description_id}'})
+    keyboard = get_inline_options_keyboard(options_dict, columns=1)
+    keyboard.append(last_row)
+  elif description_id == 'new':
+    tgbot.send_message(user_id, 'Type new description\n/cancel', keyboard=[])
+    if query_name == 'desc_task':
+      change_state(users, user_id, 'new_task_description')
+    elif query_name == 'desc_context':
+      change_state(users, user_id, 'new_context_description')
+    text += 'new description'
   else:
-    return 'No active task', None
+    description_name = users[user_id]['tasks'][task_id]['descriptions'][description_id]['name']
+    if query_name == 'desc_task':
+      users[user_id]['active_task']['description'] = description_name
+      temp_vars[user_id]['task_description'] = description_name
+    elif query_name == 'desc_context':
+      users[user_id]['active_context']['description'] = description_name
+      temp_vars[user_id]['context_description'] = description_name
+    db.write('users', users)
+    text += description_name
+  reply_markup = InlineKeyboardMarkup(keyboard)
+  return text, reply_markup
 
 def new_description(users, user_id, description_name, entry_type):
   if entry_type == 'task':
@@ -1686,15 +1763,12 @@ def menu_handler(user_id, text):
         'description':''
         }
     db.write('users',users)
-    reply_markup = get_descriptions_reply_markup(users, user_id, task_id)
     tgbot.send_message(user_id,
         f'Started {task_name}', 
         keyboard=get_main_menu(users, user_id),
         )
-    tgbot.send_message(user_id,
-        f'No description', 
-        reply_markup=reply_markup
-        )
+    text, reply_markup = handle_description_query(users, user_id, query='0|noid', query_name='desc_task')
+    tgbot.send_message(user_id, text, reply_markup=reply_markup)
     change_state(users, user_id, 'main_menu')
     get_new_timer(user_id)
 
@@ -1805,15 +1879,12 @@ def menu_handler(user_id, text):
         'description':''
         }
     db.write('users',users)
-    # reply_markup = get_descriptions_reply_markup(users, user_id, task_id) ### Context description
     tgbot.send_message(user_id,
         f'Context: {context_name}', 
         keyboard=get_main_menu(users, user_id),
         )
-    # tgbot.send_message(user_id, ### Context description
-    #     f'No description', 
-    #     reply_markup=reply_markup
-    #     )
+    text, reply_markup = handle_description_query(users, user_id, query='0|noid', query_name='desc_context')
+    tgbot.send_message(user_id, text, reply_markup=reply_markup)
     change_state(users, user_id, 'main_menu')
     get_new_timer(user_id)
 

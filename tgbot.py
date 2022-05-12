@@ -142,8 +142,8 @@ def callback_handler(update, context):
     text, reply_markup = logic.handle_info_query(users, user_id, option)
   elif function == 'desc_info':
     text, reply_markup = logic.handle_description_info_query(users, user_id, option)
-  elif function == 'description':
-    text, reply_markup = logic.handle_description_query(users, user_id, option)
+  elif function in ['desc_task', 'desc_context']:
+    text, reply_markup = logic.handle_description_query(users, user_id, option, query_name=function)
   elif function == 'tag':
     text, reply_markup = logic.handle_tags_query(users, user_id, option)
   elif function == 'order':

@@ -13,7 +13,7 @@ import traceback
 import tgbot
 import logic
 
-VERSION = '0.21.0'
+VERSION = '0.22.0'
 NAME = 'Time Tracker'
 
 # Logger setup
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         for user in whitelist:
           msg += f'\n  {user}'
       else:
-        msg += f'Whitelist disabled'
+        msg += f'\nWhitelist disabled'
       tg.send_message(chat_id=admin_id, text = msg, disable_notification=True)
     updater = tgbot.start(tg_token)
     mainloop()
