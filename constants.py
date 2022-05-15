@@ -34,6 +34,7 @@ def builtin_tags():
   return [
       'context',
       'food',
+      'hidden',
       ]
 
 def get_default_user(tg_username):
