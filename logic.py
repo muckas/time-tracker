@@ -1014,7 +1014,6 @@ def handle_order_editor_query(users, user_id, query='0|start|0'):
     text = f'Entry order editor: {entry_type}\n======================'
     for entry_id in entry_ids:
       text += '\n' + get_entry_name(users, user_id, entry_type, entry_id)
-    text += f'\np. {page+1}'
     current_entry_ids = list(users[user_id][entry_type].keys())
     inline_entry_list = subtract_lists(current_entry_ids, entry_ids)
     # Keyboard generation
@@ -1023,6 +1022,8 @@ def handle_order_editor_query(users, user_id, query='0|start|0'):
       entry_slice_start = page * page_entries
       entry_slice_end = entry_slice_start + page_entries
       entry_page = inline_entry_list[entry_slice_start:entry_slice_end]
+      max_pages = len(inline_entry_list) // page_entries
+      text += f'\np. {page+1}/{max_pages+1}'
       for entry_id in entry_page:
         entry_name = users[user_id][entry_type][entry_id]['name']
         options_dict.update({entry_name:f'{query_name}:{page}|{entry_type}|{entry_id}'})
@@ -1149,8 +1150,10 @@ def handle_entry_info_query(users, user_id, query='0|start|0'):
     options_dict = {}
     description_slice_start = page * page_entries
     description_slice_end = description_slice_start + page_entries
-    description_page = list(get_description_ids_sorted(users, user_id, chosen_entry_id))
-    description_page = description_page[description_slice_start:description_slice_end]
+    description_all = list(get_description_ids_sorted(users, user_id, chosen_entry_id))
+    description_page = description_all[description_slice_start:description_slice_end]
+    max_pages = len(description_all) // page_entries
+    report += f'\np. {page+1}/{max_pages+1}'
     for description_id in description_page:
       description_name = users[user_id]['tasks'][chosen_entry_id]['descriptions'][description_id]['name']
       options_dict.update({description_name:f'{query_name}:{page}|description|{description_id}'})
@@ -1160,14 +1163,16 @@ def handle_entry_info_query(users, user_id, query='0|start|0'):
     options_dict = {}
     entry_slice_start = page * page_entries
     entry_slice_end = entry_slice_start + page_entries
-    entry_page = list(users[user_id]['tasks'].keys())[entry_slice_start:entry_slice_end]
+    entry_all = list(users[user_id]['tasks'].keys())[entry_slice_start:entry_slice_end]
+    entry_page = entry_all[entry_slice_start:entry_slice_end]
+    max_pages = len(entry_all) // page_entries
+    report += f'\np. {page+1}/{max_pages+1}'
     for entry_id in entry_page:
       entry_name = users[user_id]['tasks'][entry_id]['name']
       options_dict.update({entry_name:f'{query_name}:0|task|{entry_id}'})
     keyboard = get_inline_options_keyboard(options_dict, columns)
   keyboard.append(last_row)
   reply_markup = InlineKeyboardMarkup(keyboard)
-  report += f'\np. {page+1}'
   return report, reply_markup
 
 def stats_alltime_entry(users, user_id, entry_id, entry_info):
@@ -1557,8 +1562,10 @@ def handle_description_query(users, user_id, query, query_name='desc_task'):
     options_dict = {}
     description_slice_start = page * page_entries
     description_slice_end = description_slice_start + page_entries
-    description_page = list(get_description_ids_sorted(users, user_id, task_id))
-    description_page = description_page[description_slice_start:description_slice_end]
+    description_all = list(get_description_ids_sorted(users, user_id, chosen_entry_id))
+    description_page = description_all[description_slice_start:description_slice_end]
+    max_pages = len(description_all) // page_entries
+    text += f'\np. {page+1}/{max_pages+1}'
     for description_id in description_page:
       description_name = users[user_id]['tasks'][task_id]['descriptions'][description_id]['name']
       options_dict.update({description_name:f'{query_name}:{page}|{description_id}'})
