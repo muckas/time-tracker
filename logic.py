@@ -1690,6 +1690,7 @@ def menu_handler(user_id, text):
       last_row = [constants.get_name('back_to_tags')],
     if get_user_option(users, user_id, 'exclusive_context'):
       tasks = subtract_lists(tasks, get_entry_names_with_tags(users, user_id, 'tasks', ['context']))
+    tasks = subtract_lists(tasks, get_entry_names_with_tags(users, user_id, 'tasks', ['hidden']))
     if tasks:
       keyboard = get_options_keyboard(tasks, columns=3)
       keyboard += last_row
