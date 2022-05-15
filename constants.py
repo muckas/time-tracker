@@ -152,7 +152,6 @@ def get_name(name):
 
     'entry_stats':'Total statistics',
     'entry_info':'Entry info',
-    'description_info':'Description info',
 
     'start_task':'Start task',
     'add_task':'Add task',

@@ -202,7 +202,6 @@ def get_main_menu(users, user_id):
         ],
         [
           constants.get_name('entry_info'),
-          constants.get_name('description_info'),
         ],
         [
           constants.get_name('menu_main'),
@@ -1096,39 +1095,6 @@ def get_entry_info(users, user_id, entry_id):
     Total time: {time_total} ~ {time_total_hours:.1f} hours'''
     return report
 
-def handle_info_query(users, user_id, query='0|tasks|no-entry'):
-  page_entries = 6
-  columns = 2
-  page, info_type, chosen_entry_id = query.split('|')
-  page = int(page)
-  if page < 0: page = 0
-  # Last row start
-  last_row = InlineKeyboardButton('<', callback_data=f'info:{page-1}|{info_type}|{chosen_entry_id}'),
-  if info_type == 'tasks':
-    report = 'Task: '
-    last_row += InlineKeyboardButton('Show places', callback_data=f'info:{page}|places|{chosen_entry_id}'),
-  elif info_type == 'places':
-    report = 'Place: '
-    last_row += InlineKeyboardButton('Show tasks', callback_data=f'info:{page}|tasks|{chosen_entry_id}'),
-  last_row += InlineKeyboardButton('>', callback_data=f'info:{page+1}|{info_type}|{chosen_entry_id}'),
-  # Last row end
-  entry_name = get_entry_name(users, user_id, 'all', chosen_entry_id)
-  if entry_name:
-    report += get_entry_info(users, user_id, chosen_entry_id)
-  # Keyboard generation
-  options_dict = {}
-  entry_slice_start = page * page_entries
-  entry_slice_end = entry_slice_start + page_entries
-  entry_page = list(users[user_id][info_type].keys())[entry_slice_start:entry_slice_end]
-  for entry_id in entry_page:
-    entry_name = users[user_id][info_type][entry_id]['name']
-    options_dict.update({entry_name:f'info:{page}|{info_type}|{entry_id}'})
-  keyboard = get_inline_options_keyboard(options_dict, columns)
-  keyboard.append(last_row)
-  reply_markup = InlineKeyboardMarkup(keyboard)
-  report += f'\np. {page+1}'
-  return report, reply_markup
-
 def get_description_info(users, user_id, task_id, description_id):
   description = users[user_id]['tasks'][task_id]['descriptions'][description_id]
   name = description['name']
@@ -1151,7 +1117,8 @@ def get_description_info(users, user_id, task_id, description_id):
     Total time: {time_total} ~ {time_total_hours:.1f} hours'''
   return report
 
-def handle_description_info_query(users, user_id, query='0|start|0'):
+def handle_entry_info_query(users, user_id, query='0|start|0'):
+  query_name = 'entry_info'
   page_entries = 6
   columns = 2
   page, command, query_entry = query.split('|')
@@ -1168,14 +1135,14 @@ def handle_description_info_query(users, user_id, query='0|start|0'):
     chosen_description_id = temp_vars[user_id]['chosen_description_id'] = query_entry
   report = 'Description viewer\n======================='
   # Last row start
-  last_row = InlineKeyboardButton('<', callback_data=f'desc_info:{page-1}|0|0'),
-  last_row += InlineKeyboardButton('Change task', callback_data=f'desc_info:0|start|0'),
-  last_row += InlineKeyboardButton('>', callback_data=f'desc_info:{page+1}|0|0'),
+  last_row = InlineKeyboardButton('<', callback_data=f'{query_name}:{page-1}|0|0'),
+  last_row += InlineKeyboardButton('Change task', callback_data=f'{query_name}:0|start|0'),
+  last_row += InlineKeyboardButton('>', callback_data=f'{query_name}:{page+1}|0|0'),
   # Last row end
   entry_name = get_entry_name(users, user_id, 'all', chosen_entry_id)
   keyboard = []
   if entry_name:
-    report += '\nTask: ' + get_entry_name(users, user_id, 'tasks', chosen_entry_id)
+    report += '\nTask: ' + get_entry_info(users, user_id, chosen_entry_id)
     if chosen_description_id in users[user_id]['tasks'][chosen_entry_id]['descriptions'].keys():
       report += '\n' + get_description_info(users, user_id, chosen_entry_id, chosen_description_id)
     # Descriptions keyboard generation
@@ -1186,7 +1153,7 @@ def handle_description_info_query(users, user_id, query='0|start|0'):
     description_page = description_page[description_slice_start:description_slice_end]
     for description_id in description_page:
       description_name = users[user_id]['tasks'][chosen_entry_id]['descriptions'][description_id]['name']
-      options_dict.update({description_name:f'desc_info:{page}|description|{description_id}'})
+      options_dict.update({description_name:f'{query_name}:{page}|description|{description_id}'})
     keyboard = get_inline_options_keyboard(options_dict, columns=1)
   else:
     # Tasks keyboard generation
@@ -1196,7 +1163,7 @@ def handle_description_info_query(users, user_id, query='0|start|0'):
     entry_page = list(users[user_id]['tasks'].keys())[entry_slice_start:entry_slice_end]
     for entry_id in entry_page:
       entry_name = users[user_id]['tasks'][entry_id]['name']
-      options_dict.update({entry_name:f'desc_info:0|task|{entry_id}'})
+      options_dict.update({entry_name:f'{query_name}:0|task|{entry_id}'})
     keyboard = get_inline_options_keyboard(options_dict, columns)
   keyboard.append(last_row)
   reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2187,11 +2154,7 @@ def menu_handler(user_id, text):
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('entry_info'):
-      report, reply_markup = handle_info_query(users, user_id)
-      tgbot.send_message(user_id, report, reply_markup=reply_markup)
-
-    elif button_name == constants.get_name('description_info'):
-      report, reply_markup = handle_description_info_query(users, user_id)
+      report, reply_markup = handle_entry_info_query(users, user_id)
       tgbot.send_message(user_id, report, reply_markup=reply_markup)
 
     elif button_name == constants.get_name('order_editor'):
