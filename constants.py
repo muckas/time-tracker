@@ -53,6 +53,7 @@ def get_default_user(tg_username):
       'tags':{
         str(uuid.uuid4()):get_default_tag('context', ['context',]),
         str(uuid.uuid4()):get_default_tag('food', ['food',]),
+        str(uuid.uuid4()):get_default_tag('hidden', ['hidden',]),
         },
       'options':{
         'tag_sort': False,
@@ -152,7 +153,6 @@ def get_name(name):
 
     'entry_stats':'Total statistics',
     'entry_info':'Entry info',
-    'description_info':'Description info',
 
     'start_task':'Start task',
     'add_task':'Add task',
