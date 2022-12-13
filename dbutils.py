@@ -385,25 +385,26 @@ def export_to_csv():
     log.info(f'Exporting tasks')
     user_tasks = users[user_id]['tasks']
     task_totals = db.read(os.path.join('data', user_id, f'task-totals-{user_id}'))
-    with open(os.path.join('db', 'data', user_id, 'tasks-daily.csv'), mode='w') as f:
-      fieldnames = ['date']
-      for task_id in user_tasks:
-        fieldnames.append(user_tasks[task_id]['name'])
-      writer = csv.DictWriter(f, fieldnames=fieldnames)
-      writer.writeheader()
-      for year in task_totals:
-        if year != 'total_time':
-          for month in task_totals[year]:
-            if month != 'total_time':
-              for day in task_totals[year][month]:
-                if day != 'total_time':
-                  date = datetime.date(int(year), int(month), int(day))
-                  row = {'date':date}
-                  for task_id in task_totals[year][month][day]['total_time'].keys():
-                    task_name = user_tasks[task_id]['name']
-                    task_time = int(task_totals[year][month][day]['total_time'][task_id])
-                    row[task_name] = task_time
-                  writer.writerow(row)
+    if task_totals:
+      with open(os.path.join('db', 'data', user_id, 'tasks-daily.csv'), mode='w') as f:
+        fieldnames = ['date']
+        for task_id in user_tasks:
+          fieldnames.append(user_tasks[task_id]['name'])
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for year in task_totals:
+          if year != 'total_time':
+            for month in task_totals[year]:
+              if month != 'total_time':
+                for day in task_totals[year][month]:
+                  if day != 'total_time':
+                    date = datetime.date(int(year), int(month), int(day))
+                    row = {'date':date}
+                    for task_id in task_totals[year][month][day]['total_time'].keys():
+                      task_name = user_tasks[task_id]['name']
+                      task_time = int(task_totals[year][month][day]['total_time'][task_id])
+                      row[task_name] = task_time
+                    writer.writerow(row)
   log.info('Finished exporting to csv')
 
 @easyargs
