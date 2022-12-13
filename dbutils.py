@@ -9,6 +9,7 @@ import easyargs
 import icalendar
 import uuid
 import logic
+import csv
 
 # Logger setup
 with suppress(FileExistsError):
@@ -375,6 +376,36 @@ def generate_descriptions(no_dry_run):
     log.info('Dry run! Changes were NOT written')
   log.info(f'Scanned a total of {total_entries} entries for {len(users)} users')
 
+def export_to_csv():
+  log.info('---------------------------')
+  log.info('Started exporting to csv')
+  users = db.read('users')
+  for user_id in users:
+    log.info(f'User {user_id}')
+    log.info(f'Exporting tasks')
+    user_tasks = users[user_id]['tasks']
+    task_totals = db.read(os.path.join('data', user_id, f'task-totals-{user_id}'))
+    with open(os.path.join('db', 'data', user_id, 'tasks-daily.csv'), mode='w') as f:
+      fieldnames = ['date']
+      for task_id in user_tasks:
+        fieldnames.append(user_tasks[task_id]['name'])
+      writer = csv.DictWriter(f, fieldnames=fieldnames)
+      writer.writeheader()
+      for year in task_totals:
+        if year != 'total_time':
+          for month in task_totals[year]:
+            if month != 'total_time':
+              for day in task_totals[year][month]:
+                if day != 'total_time':
+                  date = datetime.date(int(year), int(month), int(day))
+                  row = {'date':date}
+                  for task_id in task_totals[year][month][day]['total_time'].keys():
+                    task_name = user_tasks[task_id]['name']
+                    task_time = int(task_totals[year][month][day]['total_time'][task_id])
+                    row[task_name] = task_time
+                  writer.writerow(row)
+  log.info('Finished exporting to csv')
+
 @easyargs
 class DButils(object):
   """Database utility"""
@@ -413,6 +444,12 @@ class DButils(object):
     if no_dry_run:
       db.archive('generate_descriptions')
     generate_descriptions(no_dry_run)
+
+  def export_to_csv(self):
+    '''
+    Export data to csv
+    '''
+    export_to_csv()
 
   # DATA removed in v0.9.0
   # def generate_task_lists(self, force=False, dry_run=False):
